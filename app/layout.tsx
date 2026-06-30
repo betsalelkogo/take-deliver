@@ -34,9 +34,6 @@ export default function RootLayout({
             </div>
           </header>
           <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
-          <footer className="mx-auto max-w-5xl px-4 py-8 text-center text-xs text-slate-400">
-            נבנה עם Next.js ו-Firebase · פריסה ב-Vercel
-          </footer>
         </div>
       </body>
     </html>
