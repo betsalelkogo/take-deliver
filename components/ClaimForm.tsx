@@ -4,13 +4,13 @@ import { useState } from "react";
 import { claimManyPackages } from "@/lib/packages";
 
 interface ClaimFormProps {
-  location: string;
+  label: string;
   packageIds: string[];
   onDone: () => void;
 }
 
 export default function ClaimForm({
-  location,
+  label,
   packageIds,
   onDone,
 }: ClaimFormProps) {
@@ -41,7 +41,7 @@ export default function ClaimForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-sm text-slate-600">
         אתם מסמנים את עצמכם כאוסף החבילה בדרך אל{" "}
-        <span className="font-semibold text-slate-900">{location}</span>. הפעולה
+        <span className="font-semibold text-slate-900">{label}</span>. הפעולה
         תיקח{" "}
         <span className="font-semibold text-slate-900">
           {packageIds.length}

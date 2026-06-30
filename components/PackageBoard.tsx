@@ -9,16 +9,38 @@ import {
   unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
+import {
+  ALL_AREAS,
+  isAdhocArea,
+  subscribeToStores,
+  type StoreItem,
+} from "@/lib/locations";
 import Modal from "./Modal";
 import PackageForm from "./PackageForm";
 import ClaimForm from "./ClaimForm";
+import ManageStores from "./ManageStores";
 
 type Filter = "open" | "all";
 
-interface LocationGroup {
-  location: string;
+const NO_STORE = "ללא חנות";
+
+interface StoreGroup {
+  name: string;
   items: PackageItem[];
   availableIds: string[];
+  pinned: boolean;
+}
+
+interface AreaGroup {
+  area: string;
+  stores: StoreGroup[];
+  availableIds: string[];
+  total: number;
+}
+
+interface ClaimTarget {
+  label: string;
+  packageIds: string[];
 }
 
 function StatusBadge({ status }: { status: PackageItem["status"] }) {
@@ -59,12 +81,14 @@ function SetupNotice() {
 
 export default function PackageBoard() {
   const [items, setItems] = useState<PackageItem[]>([]);
+  const [stores, setStores] = useState<StoreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [claimTarget, setClaimTarget] = useState<LocationGroup | null>(null);
+  const [showManage, setShowManage] = useState(false);
+  const [claimTarget, setClaimTarget] = useState<ClaimTarget | null>(null);
 
   const configured = isFirebaseConfigured;
 
@@ -73,7 +97,7 @@ export default function PackageBoard() {
       setLoading(false);
       return;
     }
-    const unsub = subscribeToPackages(
+    const unsubPkgs = subscribeToPackages(
       (data) => {
         setItems(data);
         setLoading(false);
@@ -83,40 +107,91 @@ export default function PackageBoard() {
         setLoading(false);
       }
     );
-    return () => unsub();
+    const unsubStores = subscribeToStores(
+      (data) => setStores(data),
+      (err) => setError(err.message)
+    );
+    return () => {
+      unsubPkgs();
+      unsubStores();
+    };
   }, [configured]);
 
-  const groups = useMemo<LocationGroup[]>(() => {
+  const areaGroups = useMemo<AreaGroup[]>(() => {
     const term = search.trim().toLowerCase();
+    const searching = term.length > 0;
+
+    const matches = (it: PackageItem) =>
+      it.area.toLowerCase().includes(term) ||
+      it.store.toLowerCase().includes(term) ||
+      it.description.toLowerCase().includes(term) ||
+      it.ownerName.toLowerCase().includes(term);
+
     const filtered = items.filter((it) => {
       if (filter === "open" && it.status === "delivered") return false;
-      if (!term) return true;
-      return (
-        it.pickupLocation.toLowerCase().includes(term) ||
-        it.description.toLowerCase().includes(term) ||
-        it.ownerName.toLowerCase().includes(term)
-      );
+      if (searching && !matches(it)) return false;
+      return true;
     });
 
-    const byLocation = new Map<string, PackageItem[]>();
-    for (const it of filtered) {
-      const key = it.pickupLocation || "Unspecified location";
-      const arr = byLocation.get(key) ?? [];
-      arr.push(it);
-      byLocation.set(key, arr);
-    }
+    // Build the ordered list of areas: known areas first, then any extras.
+    const extraAreas = Array.from(
+      new Set(filtered.map((i) => i.area).filter((a) => a && !ALL_AREAS.includes(a)))
+    );
+    const orderedAreas = [...ALL_AREAS, ...extraAreas];
 
-    return Array.from(byLocation.entries())
-      .map(([location, list]) => ({
-        location,
-        items: list,
-        availableIds: list
+    const pinnedFor = (area: string) =>
+      stores.filter((s) => s.area === area).map((s) => s.name);
+
+    const groups: AreaGroup[] = [];
+
+    for (const area of orderedAreas) {
+      const areaPkgs = filtered.filter((p) => p.area === area);
+      const adhoc = isAdhocArea(area);
+
+      const storeNames = new Set<string>();
+      for (const p of areaPkgs) storeNames.add(p.store || NO_STORE);
+      // Pinned stores show even when empty (only for fixed areas, not while searching).
+      if (!adhoc && !searching) {
+        for (const name of pinnedFor(area)) storeNames.add(name);
+      }
+
+      if (storeNames.size === 0) continue;
+
+      const pinnedNames = new Set(pinnedFor(area));
+
+      const storeGroups: StoreGroup[] = Array.from(storeNames).map((name) => {
+        const list = areaPkgs.filter((p) => (p.store || NO_STORE) === name);
+        return {
+          name,
+          items: list,
+          availableIds: list
+            .filter((i) => i.status === "available")
+            .map((i) => i.id),
+          pinned: pinnedNames.has(name),
+        };
+      });
+
+      storeGroups.sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (b.availableIds.length !== a.availableIds.length)
+          return b.availableIds.length - a.availableIds.length;
+        return a.name.localeCompare(b.name, "he");
+      });
+
+      groups.push({
+        area,
+        stores: storeGroups,
+        availableIds: areaPkgs
           .filter((i) => i.status === "available")
           .map((i) => i.id),
-      }))
-      .sort((a, b) => b.availableIds.length - a.availableIds.length);
-  }, [items, filter, search]);
+        total: areaPkgs.length,
+      });
+    }
 
+    return groups;
+  }, [items, stores, filter, search]);
+
+  const hasAnything = areaGroups.some((g) => g.total > 0);
   const openCount = items.filter((i) => i.status !== "delivered").length;
 
   return (
@@ -141,18 +216,27 @@ export default function PackageBoard() {
           </div>
           <input
             className="input sm:w-64"
-            placeholder="חיפוש לפי מיקום, פריט, שם…"
+            placeholder="חיפוש לפי אזור, חנות, פריט, שם…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() => setShowAdd(true)}
-        >
-          + פרסום חבילה
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setShowManage(true)}
+          >
+            ניהול חנויות
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => setShowAdd(true)}
+          >
+            + פרסום חבילה
+          </button>
+        </div>
       </div>
 
       {!configured && <SetupNotice />}
@@ -167,131 +251,181 @@ export default function PackageBoard() {
 
           {loading ? (
             <p className="text-sm text-slate-500">טוען חבילות…</p>
-          ) : groups.length === 0 ? (
+          ) : areaGroups.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <p className="text-sm text-slate-500">
-                {openCount === 0
+                {openCount === 0 && !search
                   ? "אין עדיין חבילות. היו הראשונים לפרסם!"
                   : "אין חבילות שתואמות את החיפוש."}
               </p>
             </div>
           ) : (
             <div className="space-y-5">
-              {groups.map((group) => (
+              {!hasAnything && (
+                <p className="text-sm text-slate-500">
+                  אין כרגע חבילות פתוחות. החנויות הקבועות מוצגות למטה.
+                </p>
+              )}
+              {areaGroups.map((area) => (
                 <section
-                  key={group.location}
+                  key={area.area}
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-base font-bold">
-                        📍 {group.location}
+                      <span className="text-base font-bold text-brand-900">
+                        📍 {area.area}
                       </span>
-                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        {group.items.length}
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {area.total} חבילות
                       </span>
                     </div>
-                    {group.availableIds.length > 0 && (
+                    {area.availableIds.length > 0 && (
                       <button
                         type="button"
-                        className="btn-secondary"
-                        onClick={() => setClaimTarget(group)}
+                        className="btn-primary"
+                        onClick={() =>
+                          setClaimTarget({
+                            label: area.area,
+                            packageIds: area.availableIds,
+                          })
+                        }
                       >
-                        אני מגיע לכאן — לקחת {group.availableIds.length}
+                        אני מגיע לאזור — לקחת {area.availableIds.length}
                       </button>
                     )}
                   </div>
 
-                  <ul className="divide-y divide-slate-100">
-                    {group.items.map((it) => (
-                      <li key={it.id} className="px-4 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold">
-                                {it.description || "חבילה"}
-                              </span>
-                              {it.packageNumber && (
-                                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">
-                                  #{it.packageNumber}
-                                </span>
-                              )}
-                              <StatusBadge status={it.status} />
-                            </div>
-                            <p className="mt-1 text-sm text-slate-600">
-                              עבור{" "}
-                              <span className="font-medium text-slate-800">
-                                {it.ownerName || "—"}
-                              </span>
-                              {it.ownerPhone && (
-                                <>
-                                  {" · "}
-                                  <a
-                                    className="text-brand-600 hover:underline"
-                                    href={`tel:${it.ownerPhone}`}
-                                  >
-                                    {it.ownerPhone}
-                                  </a>
-                                </>
-                              )}
-                            </p>
-                            {it.notes && (
-                              <p className="mt-1 text-sm text-slate-500">
-                                {it.notes}
-                              </p>
-                            )}
-                            {it.status === "claimed" && it.courierName && (
-                              <p className="mt-1 text-sm text-amber-700">
-                                🚶 אוסף החבילה: {it.courierName}
-                                {it.courierPhone && (
-                                  <>
-                                    {" · "}
-                                    <a
-                                      className="hover:underline"
-                                      href={`tel:${it.courierPhone}`}
-                                    >
-                                      {it.courierPhone}
-                                    </a>
-                                  </>
-                                )}
-                              </p>
-                            )}
+                  <div className="divide-y divide-slate-100">
+                    {area.stores.map((store) => (
+                      <div key={store.name} className="px-4 py-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">
+                              {store.pinned ? "📌 " : "🏬 "}
+                              {store.name}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                              {store.items.length}
+                            </span>
                           </div>
-
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            {it.status === "claimed" && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn-ghost px-2 py-1 text-xs"
-                                  onClick={() => markDelivered(it.id)}
-                                >
-                                  סמן שנאספה
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-ghost px-2 py-1 text-xs"
-                                  onClick={() => unclaimPackage(it.id)}
-                                >
-                                  לא אוסף בסוף
-                                </button>
-                              </>
-                            )}
+                          {store.availableIds.length > 0 && (
                             <button
                               type="button"
-                              className="btn-ghost px-2 py-1 text-xs text-red-500 hover:text-red-700"
-                              onClick={() => {
-                                if (confirm("למחוק את החבילה?"))
-                                  deletePackage(it.id);
-                              }}
+                              className="btn-secondary px-3 py-1 text-xs"
+                              onClick={() =>
+                                setClaimTarget({
+                                  label: `${area.area} · ${store.name}`,
+                                  packageIds: store.availableIds,
+                                })
+                              }
                             >
-                              מחיקה
+                              לקחת {store.availableIds.length}
                             </button>
-                          </div>
+                          )}
                         </div>
-                      </li>
+
+                        {store.items.length === 0 ? (
+                          <p className="text-xs text-slate-400">אין חבילות</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {store.items.map((it) => (
+                              <li
+                                key={it.id}
+                                className="rounded-lg bg-slate-50 px-3 py-2"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-medium">
+                                        {it.description || "חבילה"}
+                                      </span>
+                                      {it.packageNumber && (
+                                        <span className="rounded bg-white px-1.5 py-0.5 font-mono text-xs text-slate-600">
+                                          #{it.packageNumber}
+                                        </span>
+                                      )}
+                                      <StatusBadge status={it.status} />
+                                    </div>
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      עבור{" "}
+                                      <span className="font-medium text-slate-800">
+                                        {it.ownerName || "—"}
+                                      </span>
+                                      {it.ownerPhone && (
+                                        <>
+                                          {" · "}
+                                          <a
+                                            className="text-brand-600 hover:underline"
+                                            href={`tel:${it.ownerPhone}`}
+                                          >
+                                            {it.ownerPhone}
+                                          </a>
+                                        </>
+                                      )}
+                                    </p>
+                                    {it.notes && (
+                                      <p className="mt-1 text-sm text-slate-500">
+                                        {it.notes}
+                                      </p>
+                                    )}
+                                    {it.status === "claimed" &&
+                                      it.courierName && (
+                                        <p className="mt-1 text-sm text-amber-700">
+                                          🚶 אוסף החבילה: {it.courierName}
+                                          {it.courierPhone && (
+                                            <>
+                                              {" · "}
+                                              <a
+                                                className="hover:underline"
+                                                href={`tel:${it.courierPhone}`}
+                                              >
+                                                {it.courierPhone}
+                                              </a>
+                                            </>
+                                          )}
+                                        </p>
+                                      )}
+                                  </div>
+
+                                  <div className="flex shrink-0 flex-col items-end gap-1">
+                                    {it.status === "claimed" && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="btn-ghost px-2 py-1 text-xs"
+                                          onClick={() => markDelivered(it.id)}
+                                        >
+                                          סמן כנמסרה
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn-ghost px-2 py-1 text-xs"
+                                          onClick={() => unclaimPackage(it.id)}
+                                        >
+                                          לא מגיע בסוף
+                                        </button>
+                                      </>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="btn-ghost px-2 py-1 text-xs text-red-500 hover:text-red-700"
+                                      onClick={() => {
+                                        if (confirm("למחוק את החבילה?"))
+                                          deletePackage(it.id);
+                                      }}
+                                    >
+                                      מחיקה
+                                    </button>
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </section>
               ))}
             </div>
@@ -304,7 +438,15 @@ export default function PackageBoard() {
         title="פרסום חבילה לאיסוף"
         onClose={() => setShowAdd(false)}
       >
-        <PackageForm onDone={() => setShowAdd(false)} />
+        <PackageForm stores={stores} onDone={() => setShowAdd(false)} />
+      </Modal>
+
+      <Modal
+        open={showManage}
+        title="ניהול חנויות קבועות"
+        onClose={() => setShowManage(false)}
+      >
+        <ManageStores stores={stores} />
       </Modal>
 
       <Modal
@@ -314,8 +456,8 @@ export default function PackageBoard() {
       >
         {claimTarget && (
           <ClaimForm
-            location={claimTarget.location}
-            packageIds={claimTarget.availableIds}
+            label={claimTarget.label}
+            packageIds={claimTarget.packageIds}
             onDone={() => setClaimTarget(null)}
           />
         )}
