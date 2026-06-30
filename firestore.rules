@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Firestore Security Rules for the "packages" collection.
+//
+// This starter is an OPEN board (no login): anyone can read and write packages.
+// That is convenient for a small, trusted group sharing one link, but it means
+// anyone with the URL can add/edit/delete entries.
+//
+// The rules below at least:
+//   - validate the shape of incoming documents,
+//   - cap string lengths to limit abuse,
+//   - restrict status to known values.
+//
+// For anything beyond a trusted group, add Firebase Authentication and gate
+// writes on `request.auth != null` (see commented example at the bottom).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /packages/{packageId} {
+
+      function validPackage(data) {
+        return data.pickupLocation is string
+          && data.pickupLocation.size() > 0
+          && data.pickupLocation.size() <= 200
+          && data.ownerName is string
+          && data.ownerName.size() > 0
+          && data.ownerName.size() <= 100
+          && data.description.size() <= 300
+          && data.packageNumber.size() <= 100
+          && data.ownerPhone.size() <= 40
+          && data.notes.size() <= 1000
+          && data.status in ['available', 'claimed', 'delivered'];
+      }
+
+      allow read: if true;
+      allow create: if validPackage(request.resource.data);
+      allow update: if validPackage(request.resource.data);
+      allow delete: if true;
+
+      // --- Recommended hardening with Firebase Auth ---
+      // allow read: if request.auth != null;
+      // allow create, update, delete: if request.auth != null
+      //   && validPackage(request.resource.data);
+    }
+  }
+}
