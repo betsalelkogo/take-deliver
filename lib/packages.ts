@@ -11,13 +11,15 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
+import { ADHOC_AREA } from "./locations";
 
 export type PackageStatus = "available" | "claimed" | "delivered";
 
 export interface PackageItem {
   id: string;
+  area: string;
+  store: string;
   description: string;
-  pickupLocation: string;
   packageNumber: string;
   ownerName: string;
   ownerPhone: string;
@@ -29,8 +31,9 @@ export interface PackageItem {
 }
 
 export interface NewPackageInput {
+  area: string;
+  store: string;
   description: string;
-  pickupLocation: string;
   packageNumber: string;
   ownerName: string;
   ownerPhone: string;
@@ -39,7 +42,7 @@ export interface NewPackageInput {
 
 const COLLECTION = "packages";
 
-function normalizeLocation(value: string): string {
+function normalizeName(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
@@ -56,10 +59,13 @@ export function subscribeToPackages(
       const items: PackageItem[] = snapshot.docs.map((d) => {
         const data = d.data();
         const created = data.createdAt as Timestamp | null | undefined;
+        // Legacy docs only had `pickupLocation`; map them into the ad-hoc area.
+        const legacyLocation = data.pickupLocation ?? "";
         return {
           id: d.id,
+          area: data.area ?? (legacyLocation ? ADHOC_AREA : ""),
+          store: data.store ?? legacyLocation,
           description: data.description ?? "",
-          pickupLocation: data.pickupLocation ?? "",
           packageNumber: data.packageNumber ?? "",
           ownerName: data.ownerName ?? "",
           ownerPhone: data.ownerPhone ?? "",
@@ -78,9 +84,14 @@ export function subscribeToPackages(
 
 export async function createPackage(input: NewPackageInput): Promise<void> {
   const db = getDb();
+  const store = normalizeName(input.store);
+  const area = normalizeName(input.area);
   await addDoc(collection(db, COLLECTION), {
+    area,
+    store,
+    // Kept for backward compatibility with any older readers.
+    pickupLocation: store ? `${area} · ${store}` : area,
     description: input.description.trim(),
-    pickupLocation: normalizeLocation(input.pickupLocation),
     packageNumber: input.packageNumber.trim(),
     ownerName: input.ownerName.trim(),
     ownerPhone: input.ownerPhone.trim(),
