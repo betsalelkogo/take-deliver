@@ -309,20 +309,6 @@ export default function PackageBoard() {
                               {store.items.length}
                             </span>
                           </div>
-                          {store.availableIds.length > 0 && (
-                            <button
-                              type="button"
-                              className="btn-secondary px-3 py-1 text-xs"
-                              onClick={() =>
-                                setClaimTarget({
-                                  label: `${area.area} · ${store.name}`,
-                                  packageIds: store.availableIds,
-                                })
-                              }
-                            >
-                              לקחת {store.availableIds.length}
-                            </button>
-                          )}
                         </div>
 
                         {store.items.length === 0 ? (
@@ -332,7 +318,13 @@ export default function PackageBoard() {
                             {store.items.map((it) => (
                               <li
                                 key={it.id}
-                                className="rounded-lg bg-slate-50 px-3 py-2"
+                                className={`rounded-lg px-3 py-2 ${
+                                  it.status === "claimed"
+                                    ? "border border-amber-300 bg-amber-50"
+                                    : it.status === "delivered"
+                                    ? "bg-slate-100 opacity-70"
+                                    : "bg-slate-50"
+                                }`}
                               >
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                   <div className="min-w-0">
@@ -369,15 +361,25 @@ export default function PackageBoard() {
                                         {it.notes}
                                       </p>
                                     )}
-                                    {it.status === "claimed" &&
-                                      it.courierName && (
-                                        <p className="mt-1 text-sm text-amber-700">
-                                          🚶 אוסף החבילה: {it.courierName}
+                                    {(it.status === "claimed" ||
+                                      it.status === "delivered") &&
+                                      (it.courierName || it.courierPhone) && (
+                                        <p
+                                          className={`mt-1.5 inline-flex flex-wrap items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold ${
+                                            it.status === "delivered"
+                                              ? "bg-emerald-100 text-emerald-800"
+                                              : "bg-amber-100 text-amber-800"
+                                          }`}
+                                        >
+                                          {it.status === "delivered"
+                                            ? "✅ נמסר ע״י "
+                                            : "🚶 נלקח ע״י "}
+                                          {it.courierName || "אוסף החבילה"}
                                           {it.courierPhone && (
                                             <>
                                               {" · "}
                                               <a
-                                                className="hover:underline"
+                                                className="font-medium hover:underline"
                                                 href={`tel:${it.courierPhone}`}
                                               >
                                                 {it.courierPhone}
@@ -389,6 +391,22 @@ export default function PackageBoard() {
                                   </div>
 
                                   <div className="flex shrink-0 flex-col items-end gap-1">
+                                    {it.status === "available" && (
+                                      <button
+                                        type="button"
+                                        className="btn-secondary px-3 py-1 text-xs"
+                                        onClick={() =>
+                                          setClaimTarget({
+                                            label: `${store.name} — ${
+                                              it.description || "חבילה"
+                                            }`,
+                                            packageIds: [it.id],
+                                          })
+                                        }
+                                      >
+                                        אני לוקח
+                                      </button>
+                                    )}
                                     {it.status === "claimed" && (
                                       <>
                                         <button
