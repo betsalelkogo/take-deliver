@@ -44,9 +44,11 @@ export default function ClaimForm({
         <span className="font-semibold text-slate-900">{label}</span>. הפעולה
         תיקח{" "}
         <span className="font-semibold text-slate-900">
-          {packageIds.length}
+          {packageIds.length === 1
+            ? "חבילה אחת"
+            : `${packageIds.length} חבילות`}
         </span>{" "}
-        חבילות שמחכות שם.
+        שמחכות שם.
       </p>
       <div>
         <label className="label">
