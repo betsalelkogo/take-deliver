@@ -43,6 +43,12 @@ service cloud.firestore {
       //   && validPackage(request.resource.data);
     }
 
+    match /stats/{docId} {
+      // A simple public counter of packages collected all-time.
+      allow read: if true;
+      allow write: if request.resource.data.collected is number;
+    }
+
     match /stores/{storeId} {
 
       function validStore(data) {
