@@ -65,41 +65,58 @@ To redeploy after changing env vars, trigger a new deployment so they're baked i
 
 ---
 
+## Notifying owners on WhatsApp
+
+When a neighbour taps **"אני לוקח"**, the package shows a green **WhatsApp** button. Tapping
+it opens WhatsApp (from the collector's own phone) prefilled with a message to the owner —
+"היי X, אני Y ואוסף לך את החבילה…" — and the collector just hits send. No API, dedicated
+number, or paid service required.
+
+---
+
 ## Project structure
 
 ```
 app/
-  layout.tsx        # shell, header/footer
-  page.tsx          # landing hero + board
-  globals.css       # Tailwind + shared component classes
+  layout.tsx           # shell, header/footer (Hebrew, RTL)
+  page.tsx             # landing hero + board
+  globals.css          # Tailwind + shared component classes
 components/
-  PackageBoard.tsx  # subscribes to Firestore, groups by location, renders board
-  PackageForm.tsx   # "post a package" form
-  ClaimForm.tsx     # "become the courier" form
-  Modal.tsx         # lightweight modal
+  PackageBoard.tsx     # subscribes to Firestore, groups by area→store, tabs/filters
+  PackageForm.tsx      # "post a package" form (area/store picker)
+  PackageRow.tsx       # collapsible package row (take, note, whatsapp, actions)
+  ManageStores.tsx     # add/remove pinned stores per area
+  IdentityForm.tsx     # "who am I" (saved locally for one-click claims)
+  Modal.tsx            # lightweight modal
 lib/
-  firebase.ts       # Firebase app/Firestore init from env vars
-  packages.ts       # types + Firestore CRUD + realtime subscription
-firestore.rules     # security rules to paste into the Firebase console
+  firebase.ts          # Firebase app/Firestore init from env vars
+  packages.ts          # package types + Firestore CRUD + realtime subscription
+  locations.ts         # areas + pinned stores (Firestore)
+  identity.ts          # local (device) identity hook
+  whatsapp.ts          # phone formatting + wa.me message builder
+firestore.rules        # security rules to paste into the Firebase console
 ```
 
 ## Data model (`packages` collection)
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `description` | string | What the package is |
-| `pickupLocation` | string | Used to group packages |
+| `area` | string | First-level area; used to group packages |
+| `store` | string | Pinned or ad-hoc store within the area |
+| `description` | string | Short title (≤40 chars) |
 | `packageNumber` | string | Tracking / locker code |
-| `ownerName` | string | Who needs it picked up |
-| `ownerPhone` | string | Owner contact |
+| `ownerName` / `ownerPhone` | string | Who needs it picked up + contact |
 | `notes` | string | Free text |
 | `status` | `available` \| `claimed` \| `delivered` | |
-| `courierName` / `courierPhone` | string \| null | Set when claimed |
-| `createdAt` | timestamp | Server timestamp |
+| `courierName` / `courierPhone` | string \| null | Set when taken |
+| `courierNote` | string | Collector's drop-off note (when/where) |
+| `createdAt` / `deliveredAt` | timestamp | Server timestamps |
+
+The `stores` collection holds pinned stores: `{ area, name, createdAt }`.
 
 ## Possible next steps
 
 - Add **Firebase Authentication** (e.g. Google sign-in) and lock writes to signed-in users.
-- Add ETA / pickup time to a courier's claim.
-- Send a notification (email/Telegram/WhatsApp) to owners when a courier claims their package.
+- Add ETA / pickup time to a claim.
+- Notify owners via email/Telegram in addition to WhatsApp.
 ```
