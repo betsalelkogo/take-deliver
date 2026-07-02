@@ -203,8 +203,13 @@ export default function PackageForm({
             className="input"
             placeholder="לדוגמה: קופסה קטנה, מעטפה"
             value={description}
+            maxLength={40}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <p className="mt-1 text-xs text-slate-400">
+            תיאור קצר (עד 40 תווים). פרטים ארוכים כדאי לרשום ב&quot;הערות&quot;.{" "}
+            {description.length}/40
+          </p>
         </div>
       </div>
 
