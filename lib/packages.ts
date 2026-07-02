@@ -27,7 +27,9 @@ export interface PackageItem {
   status: PackageStatus;
   courierName: string | null;
   courierPhone: string | null;
+  courierNote: string;
   createdAt: number | null;
+  deliveredAt: number | null;
 }
 
 export interface NewPackageInput {
@@ -59,6 +61,7 @@ export function subscribeToPackages(
       const items: PackageItem[] = snapshot.docs.map((d) => {
         const data = d.data();
         const created = data.createdAt as Timestamp | null | undefined;
+        const delivered = data.deliveredAt as Timestamp | null | undefined;
         // Legacy docs only had `pickupLocation`; map them into the ad-hoc area.
         const legacyLocation = data.pickupLocation ?? "";
         return {
@@ -73,7 +76,9 @@ export function subscribeToPackages(
           status: (data.status as PackageStatus) ?? "available",
           courierName: data.courierName ?? null,
           courierPhone: data.courierPhone ?? null,
+          courierNote: data.courierNote ?? "",
           createdAt: created ? created.toMillis() : null,
+          deliveredAt: delivered ? delivered.toMillis() : null,
         };
       });
       onData(items);
@@ -99,7 +104,9 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     status: "available" as PackageStatus,
     courierName: null,
     courierPhone: null,
+    courierNote: "",
     createdAt: serverTimestamp(),
+    deliveredAt: null,
   });
 }
 
@@ -124,10 +131,18 @@ export async function claimManyPackages(
   await Promise.all(ids.map((id) => claimPackage(id, courierName, courierPhone)));
 }
 
+export async function setCourierNote(id: string, note: string): Promise<void> {
+  const db = getDb();
+  await updateDoc(doc(db, COLLECTION, id), {
+    courierNote: note.trim(),
+  });
+}
+
 export async function markDelivered(id: string): Promise<void> {
   const db = getDb();
   await updateDoc(doc(db, COLLECTION, id), {
     status: "delivered" as PackageStatus,
+    deliveredAt: serverTimestamp(),
   });
 }
 
@@ -137,6 +152,8 @@ export async function unclaimPackage(id: string): Promise<void> {
     status: "available" as PackageStatus,
     courierName: null,
     courierPhone: null,
+    courierNote: "",
+    deliveredAt: null,
   });
 }
 
