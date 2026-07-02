@@ -3,12 +3,11 @@
 import { useState } from "react";
 import {
   deletePackage,
-  markDelivered,
   setCourierNote,
   unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
-import { takenMessage, whatsappLink } from "@/lib/whatsapp";
+import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
 
 function WhatsappIcon() {
   return (
@@ -27,12 +26,10 @@ function StatusBadge({ status }: { status: PackageItem["status"] }) {
   const cls: Record<PackageItem["status"], string> = {
     available: "bg-emerald-100 text-emerald-700",
     claimed: "bg-amber-100 text-amber-700",
-    delivered: "bg-slate-200 text-slate-600",
   };
   const label: Record<PackageItem["status"], string> = {
-    available: "ממתינה לאיסוף",
-    claimed: "נלקחה",
-    delivered: "נמסרה",
+    available: "ממתין ללקיחה",
+    claimed: "נלקח",
   };
   return (
     <span
@@ -57,8 +54,6 @@ export default function PackageRow({
   const liClass =
     item.status === "claimed"
       ? "border border-amber-300 bg-amber-50"
-      : item.status === "delivered"
-      ? "bg-slate-100 opacity-80"
       : "bg-slate-50";
 
   const saveNote = async () => {
@@ -111,16 +106,9 @@ export default function PackageRow({
       </div>
 
       {/* Collector line (visible even when collapsed) */}
-      {item.status !== "available" && (item.courierName || item.courierPhone) && (
-        <p
-          className={`mt-1.5 inline-flex flex-wrap items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold ${
-            item.status === "delivered"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-amber-100 text-amber-800"
-          }`}
-        >
-          {item.status === "delivered" ? "✅ נמסר ע״י " : "🚶 נלקח ע״י "}
-          {item.courierName || "אוסף החבילה"}
+      {item.status === "claimed" && (item.courierName || item.courierPhone) && (
+        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-800">
+          🚶 נלקח ע״י {item.courierName || "אוסף החבילה"}
           {item.courierPhone && (
             <>
               {" · "}
@@ -135,20 +123,34 @@ export default function PackageRow({
         </p>
       )}
 
-      {/* WhatsApp the owner (tap to send from your own WhatsApp) */}
-      {item.status !== "available" && item.ownerPhone && (
-        <div className="mt-1.5">
-          <a
-            href={whatsappLink(
-              item.ownerPhone,
-              takenMessage(item, item.courierName || "שכן/ה")
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#25D366] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
-          >
-            <WhatsappIcon /> עדכון לבעל החבילה בוואטסאפ
-          </a>
+      {/* WhatsApp buttons (tap to send from your own WhatsApp) */}
+      {item.status === "claimed" && (item.ownerPhone || item.courierPhone) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {/* Collector → owner */}
+          {item.ownerPhone && (
+            <a
+              href={whatsappLink(
+                item.ownerPhone,
+                takenMessage(item, item.courierName || "שכן/ה")
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#25D366] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
+            >
+              <WhatsappIcon /> הודעה לבעל החבילה
+            </a>
+          )}
+          {/* Owner → collector */}
+          {item.courierPhone && (
+            <a
+              href={whatsappLink(item.courierPhone, messageToCollector(item))}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#25D366] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
+            >
+              <WhatsappIcon /> הודעה לאוסף החבילה
+            </a>
+          )}
         </div>
       )}
 
@@ -179,7 +181,7 @@ export default function PackageRow({
           {item.notes && <p className="text-slate-500">📝 {item.notes}</p>}
 
           {/* Collector drop-off note */}
-          {item.status !== "available" && (
+          {item.status === "claimed" && (
             <div>
               {editingNote ? (
                 <div className="flex flex-col gap-2">
@@ -235,22 +237,13 @@ export default function PackageRow({
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-1">
             {item.status === "claimed" && (
-              <>
-                <button
-                  type="button"
-                  className="btn-secondary px-3 py-1 text-xs"
-                  onClick={() => markDelivered(item.id)}
-                >
-                  סמן כנמסרה
-                </button>
-                <button
-                  type="button"
-                  className="btn-ghost px-3 py-1 text-xs"
-                  onClick={() => unclaimPackage(item.id)}
-                >
-                  לא מגיע בסוף
-                </button>
-              </>
+              <button
+                type="button"
+                className="btn-ghost px-3 py-1 text-xs"
+                onClick={() => unclaimPackage(item.id)}
+              >
+                לא מגיע בסוף
+              </button>
             )}
             <button
               type="button"
