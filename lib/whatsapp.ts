@@ -10,6 +10,11 @@ export function toIntlPhone(phone: string): string {
   return digits;
 }
 
+// A phone is considered valid if it contains at least 9 digits.
+export function isValidPhone(phone: string): boolean {
+  return phone.replace(/\D/g, "").length >= 9;
+}
+
 export function whatsappLink(phone: string, text: string): string {
   const intl = toIntlPhone(phone);
   return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
