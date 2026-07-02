@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Identity } from "@/lib/identity";
+import { isValidPhone } from "@/lib/whatsapp";
 
 export default function IdentityForm({
   initial,
@@ -18,6 +19,10 @@ export default function IdentityForm({
     e.preventDefault();
     if (!name.trim()) {
       setError("הזינו שם.");
+      return;
+    }
+    if (!isValidPhone(phone)) {
+      setError("הזינו מספר טלפון תקין.");
       return;
     }
     onSave({ name: name.trim(), phone: phone.trim() });
@@ -41,9 +46,13 @@ export default function IdentityForm({
         />
       </div>
       <div>
-        <label className="label">הטלפון שלך</label>
+        <label className="label">
+          הטלפון שלך <span className="text-red-500">*</span>
+        </label>
         <input
           className="input"
+          type="tel"
+          inputMode="tel"
           placeholder="כדי שהבעלים יוכלו לתאם איתך"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}

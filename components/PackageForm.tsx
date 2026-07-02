@@ -9,6 +9,7 @@ import {
   isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
+import { isValidPhone } from "@/lib/whatsapp";
 
 const NEW_STORE = "__new__";
 
@@ -67,6 +68,10 @@ export default function PackageForm({
     }
     if (!ownerName.trim()) {
       setError("הזינו את השם שלכם.");
+      return;
+    }
+    if (!isValidPhone(ownerPhone)) {
+      setError("הזינו מספר טלפון תקין.");
       return;
     }
     setSubmitting(true);
@@ -226,9 +231,13 @@ export default function PackageForm({
           />
         </div>
         <div>
-          <label className="label">הטלפון שלך</label>
+          <label className="label">
+            הטלפון שלך <span className="text-red-500">*</span>
+          </label>
           <input
             className="input"
+            type="tel"
+            inputMode="tel"
             placeholder="כדי שאוסף החבילה יוכל ליצור קשר"
             value={ownerPhone}
             onChange={(e) => setOwnerPhone(e.target.value)}
