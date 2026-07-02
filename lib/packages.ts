@@ -13,7 +13,7 @@ import {
 import { getDb } from "./firebase";
 import { ADHOC_AREA } from "./locations";
 
-export type PackageStatus = "available" | "claimed" | "delivered";
+export type PackageStatus = "available" | "claimed";
 
 export interface PackageItem {
   id: string;
@@ -29,7 +29,6 @@ export interface PackageItem {
   courierPhone: string | null;
   courierNote: string;
   createdAt: number | null;
-  deliveredAt: number | null;
 }
 
 export interface NewPackageInput {
@@ -61,9 +60,12 @@ export function subscribeToPackages(
       const items: PackageItem[] = snapshot.docs.map((d) => {
         const data = d.data();
         const created = data.createdAt as Timestamp | null | undefined;
-        const delivered = data.deliveredAt as Timestamp | null | undefined;
         // Legacy docs only had `pickupLocation`; map them into the ad-hoc area.
         const legacyLocation = data.pickupLocation ?? "";
+        // Legacy "delivered" docs are shown as "claimed" (2-state model).
+        const rawStatus = data.status ?? "available";
+        const status: PackageStatus =
+          rawStatus === "available" ? "available" : "claimed";
         return {
           id: d.id,
           area: data.area ?? (legacyLocation ? ADHOC_AREA : ""),
@@ -73,12 +75,11 @@ export function subscribeToPackages(
           ownerName: data.ownerName ?? "",
           ownerPhone: data.ownerPhone ?? "",
           notes: data.notes ?? "",
-          status: (data.status as PackageStatus) ?? "available",
+          status,
           courierName: data.courierName ?? null,
           courierPhone: data.courierPhone ?? null,
           courierNote: data.courierNote ?? "",
           createdAt: created ? created.toMillis() : null,
-          deliveredAt: delivered ? delivered.toMillis() : null,
         };
       });
       onData(items);
@@ -106,7 +107,6 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     courierPhone: null,
     courierNote: "",
     createdAt: serverTimestamp(),
-    deliveredAt: null,
   });
 }
 
@@ -138,14 +138,6 @@ export async function setCourierNote(id: string, note: string): Promise<void> {
   });
 }
 
-export async function markDelivered(id: string): Promise<void> {
-  const db = getDb();
-  await updateDoc(doc(db, COLLECTION, id), {
-    status: "delivered" as PackageStatus,
-    deliveredAt: serverTimestamp(),
-  });
-}
-
 export async function unclaimPackage(id: string): Promise<void> {
   const db = getDb();
   await updateDoc(doc(db, COLLECTION, id), {
@@ -153,7 +145,6 @@ export async function unclaimPackage(id: string): Promise<void> {
     courierName: null,
     courierPhone: null,
     courierNote: "",
-    deliveredAt: null,
   });
 }
 

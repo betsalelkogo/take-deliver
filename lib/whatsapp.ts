@@ -26,3 +26,11 @@ export function takenMessage(item: PackageItem, collectorName: string): string {
     `${place ? ` מ-${place}` : ""}.${note}`
   );
 }
+
+// Message sent from the owner to the collector (to coordinate the handoff).
+export function messageToCollector(item: PackageItem): string {
+  const what = item.description ? ` (${item.description})` : "";
+  const hi = item.courierName ? `היי ${item.courierName}, ` : "היי, ";
+  const who = item.ownerName ? `כאן ${item.ownerName}. ` : "";
+  return `${hi}${who}תודה שאספת לי את החבילה${what}. אפשר לתאם מסירה?`;
+}

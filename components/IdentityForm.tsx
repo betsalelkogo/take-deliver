@@ -35,7 +35,7 @@ export default function IdentityForm({
         </label>
         <input
           className="input"
-          placeholder="לדוגמה: אלירן אביטל"
+          placeholder="לדוגמה: ישראל ישראלי"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />

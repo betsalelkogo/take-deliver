@@ -19,10 +19,9 @@ import ManageStores from "./ManageStores";
 import IdentityForm from "./IdentityForm";
 import PackageRow from "./PackageRow";
 
-type View = "available" | "claimed" | "delivered";
+type View = "available" | "claimed";
 
 const NO_STORE = "ללא חנות";
-const DAY = 24 * 60 * 60 * 1000;
 
 interface StoreGroup {
   name: string;
@@ -35,11 +34,6 @@ interface AreaGroup {
   area: string;
   stores: StoreGroup[];
   total: number;
-}
-
-interface TimeBucket {
-  label: string;
-  items: PackageItem[];
 }
 
 function SetupNotice() {
@@ -128,8 +122,6 @@ export default function PackageBoard() {
     it.ownerName.toLowerCase().includes(term);
 
   const areaGroups = useMemo<AreaGroup[]>(() => {
-    if (view === "delivered") return [];
-
     const filtered = items.filter(
       (it) =>
         it.status === view &&
@@ -187,47 +179,13 @@ export default function PackageBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, stores, view, areaFilter, term]);
 
-  const deliveredBuckets = useMemo<TimeBucket[]>(() => {
-    if (view !== "delivered") return [];
-    const now = Date.now();
-    const delivered = items
-      .filter(
-        (it) =>
-          it.status === "delivered" &&
-          (!areaFilter || it.area === areaFilter) &&
-          matchesText(it)
-      )
-      .sort(
-        (a, b) =>
-          (b.deliveredAt ?? b.createdAt ?? 0) -
-          (a.deliveredAt ?? a.createdAt ?? 0)
-      );
-
-    const defs: { label: string; max: number }[] = [
-      { label: "השבוע", max: 7 },
-      { label: "לפני שבוע–שבועיים", max: 14 },
-      { label: "שבועיים–שלושה שבועות", max: 21 },
-      { label: "שלושה שבועות–חודש", max: 30 },
-      { label: "מעל חודש", max: Infinity },
-    ];
-    const buckets: TimeBucket[] = defs.map((d) => ({ label: d.label, items: [] }));
-    for (const it of delivered) {
-      const t = it.deliveredAt ?? it.createdAt ?? now;
-      const days = (now - t) / DAY;
-      const idx = defs.findIndex((d) => days <= d.max);
-      buckets[idx === -1 ? defs.length - 1 : idx].items.push(it);
-    }
-    return buckets.filter((b) => b.items.length > 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, view, areaFilter, term]);
-
   return (
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
-            {(["available", "claimed", "delivered"] as View[]).map((v) => (
+            {(["available", "claimed"] as View[]).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -238,11 +196,7 @@ export default function PackageBoard() {
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                {v === "available"
-                  ? "פתוח לאיסוף"
-                  : v === "claimed"
-                  ? "נאסף (בדרך)"
-                  : "נמסרו"}
+                {v === "available" ? "ממתין ללקיחה" : "נלקח"}
               </button>
             ))}
           </div>
@@ -319,87 +273,56 @@ export default function PackageBoard() {
 
           {loading ? (
             <p className="text-sm text-slate-500">טוען חבילות…</p>
-          ) : view !== "delivered" ? (
-            areaGroups.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                <p className="text-sm text-slate-500">
-                  {view === "available"
-                    ? "אין כרגע חבילות פתוחות לאיסוף."
-                    : "אין כרגע חבילות שנאספו וממתינות למסירה."}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {areaGroups.map((area) => (
-                  <section
-                    key={area.area}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-bold text-brand-900">
-                          📍 {area.area}
-                        </span>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                          {area.total} חבילות
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="divide-y divide-slate-100">
-                      {area.stores.map((store) => (
-                        <div key={store.name} className="px-4 py-3">
-                          <div className="mb-2 flex items-center gap-2">
-                            <span className="font-semibold">
-                              {store.pinned ? "📌 " : "🏬 "}
-                              {store.name}
-                            </span>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                              {store.items.length}
-                            </span>
-                          </div>
-                          {store.items.length === 0 ? (
-                            <p className="text-xs text-slate-400">אין חבילות</p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {store.items.map((it) => (
-                                <PackageRow
-                                  key={it.id}
-                                  item={it}
-                                  onTake={takePackage}
-                                />
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )
-          ) : deliveredBuckets.length === 0 ? (
+          ) : areaGroups.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-              <p className="text-sm text-slate-500">אין חבילות שנמסרו עדיין.</p>
+              <p className="text-sm text-slate-500">
+                {view === "available"
+                  ? "אין כרגע חבילות שממתינות ללקיחה."
+                  : "אין כרגע חבילות שנלקחו."}
+              </p>
             </div>
           ) : (
             <div className="space-y-5">
-              {deliveredBuckets.map((bucket) => (
+              {areaGroups.map((area) => (
                 <section
-                  key={bucket.label}
+                  key={area.area}
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
                 >
-                  <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
-                    <span className="text-base font-bold">🗓️ {bucket.label}</span>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                      {bucket.items.length}
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold text-brand-900">
+                        📍 {area.area}
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {area.total} חבילות
+                      </span>
+                    </div>
                   </div>
-                  <ul className="space-y-2 p-4">
-                    {bucket.items.map((it) => (
-                      <PackageRow key={it.id} item={it} onTake={takePackage} />
+
+                  <div className="divide-y divide-slate-100">
+                    {area.stores.map((store) => (
+                      <div key={store.name} className="px-4 py-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="font-semibold">
+                            {store.pinned ? "📌 " : "🏬 "}
+                            {store.name}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            {store.items.length}
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {store.items.map((it) => (
+                            <PackageRow
+                              key={it.id}
+                              item={it}
+                              onTake={takePackage}
+                            />
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </section>
               ))}
             </div>
