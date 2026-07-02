@@ -13,6 +13,10 @@ import {
   type StoreItem,
 } from "@/lib/locations";
 import { useIdentity } from "@/lib/identity";
+import {
+  incrementCollectedCount,
+  subscribeToCollectedCount,
+} from "@/lib/stats";
 import Modal from "./Modal";
 import PackageForm from "./PackageForm";
 import ManageStores from "./ManageStores";
@@ -63,6 +67,7 @@ export default function PackageBoard() {
   const [showManage, setShowManage] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [pendingTake, setPendingTake] = useState<PackageItem | null>(null);
+  const [collectedCount, setCollectedCount] = useState(0);
 
   const { identity, setIdentity } = useIdentity();
   const configured = isFirebaseConfigured;
@@ -86,9 +91,13 @@ export default function PackageBoard() {
       (data) => setStores(data),
       (err) => setError(err.message)
     );
+    const unsubStats = subscribeToCollectedCount((count) =>
+      setCollectedCount(count)
+    );
     return () => {
       unsubPkgs();
       unsubStores();
+      unsubStats();
     };
   }, [configured]);
 
@@ -101,6 +110,7 @@ export default function PackageBoard() {
       return;
     }
     claimManyPackages([item.id], identity.name, identity.phone);
+    incrementCollectedCount(1);
   };
 
   const handleIdentitySave = (id: { name: string; phone: string }) => {
@@ -108,6 +118,7 @@ export default function PackageBoard() {
     setShowIdentity(false);
     if (pendingTake) {
       claimManyPackages([pendingTake.id], id.name, id.phone);
+      incrementCollectedCount(1);
       setPendingTake(null);
     }
   };
@@ -181,6 +192,10 @@ export default function PackageBoard() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-800">
+        🎉 עד היום נאספו {collectedCount.toLocaleString("he-IL")} חבילות!
+      </div>
+
       {/* Controls */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
