@@ -29,7 +29,17 @@ service cloud.firestore {
           && data.ownerName is string
           && data.ownerName.size() > 0
           && data.ownerName.size() <= 100
-          && data.status in ['available', 'claimed', 'delivered'];
+          && data.ownerPhone is string
+          && data.ownerPhone.size() > 0
+          && data.status in ['available', 'claimed', 'delivered']
+          // A collected package must record who took it (name + phone).
+          && (
+            data.status != 'claimed'
+            || (
+              data.courierPhone is string && data.courierPhone.size() > 0
+              && data.courierName is string && data.courierName.size() > 0
+            )
+          );
       }
 
       allow read: if true;
