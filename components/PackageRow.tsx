@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   deletePackage,
   setCourierNote,
-  unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
 import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
@@ -43,9 +42,11 @@ function StatusBadge({ status }: { status: PackageItem["status"] }) {
 export default function PackageRow({
   item,
   onTake,
+  onRelease,
 }: {
   item: PackageItem;
   onTake: (item: PackageItem) => void;
+  onRelease: (item: PackageItem) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -240,7 +241,7 @@ export default function PackageRow({
               <button
                 type="button"
                 className="btn-ghost px-3 py-1 text-xs"
-                onClick={() => unclaimPackage(item.id)}
+                onClick={() => onRelease(item)}
               >
                 לא מגיע בסוף
               </button>

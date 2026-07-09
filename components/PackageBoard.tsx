@@ -5,6 +5,7 @@ import { isFirebaseConfigured } from "@/lib/firebase";
 import {
   claimManyPackages,
   subscribeToPackages,
+  unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
 import {
@@ -113,6 +114,13 @@ export default function PackageBoard() {
     incrementCollectedCount(1);
   };
 
+  // Releasing a claimed package ("לא מגיע בסוף") reverses the collect: it frees
+  // the package again and rolls the all-time counter back by one.
+  const releasePackage = (item: PackageItem) => {
+    unclaimPackage(item.id);
+    incrementCollectedCount(-1);
+  };
+
   const handleIdentitySave = (id: { name: string; phone: string }) => {
     setIdentity(id);
     setShowIdentity(false);
@@ -193,7 +201,7 @@ export default function PackageBoard() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-800">
-        🎉 עד היום נאספו {collectedCount.toLocaleString("he-IL")} חבילות!
+        🎉 עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות!
       </div>
 
       {/* Controls */}
@@ -332,6 +340,7 @@ export default function PackageBoard() {
                               key={it.id}
                               item={it}
                               onTake={takePackage}
+                              onRelease={releasePackage}
                             />
                           ))}
                         </ul>
