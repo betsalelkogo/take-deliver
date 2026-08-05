@@ -29,7 +29,11 @@ export interface PackageItem {
   courierPhone: string | null;
   courierNote: string;
   createdAt: number | null;
+  claimedAt: number | null;
 }
+
+// Taken packages are auto-removed this long after being claimed.
+export const CLAIMED_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 
 export interface NewPackageInput {
   area: string;
@@ -60,6 +64,7 @@ export function subscribeToPackages(
       const items: PackageItem[] = snapshot.docs.map((d) => {
         const data = d.data();
         const created = data.createdAt as Timestamp | null | undefined;
+        const claimed = data.claimedAt as Timestamp | null | undefined;
         // Legacy docs only had `pickupLocation`; map them into the ad-hoc area.
         const legacyLocation = data.pickupLocation ?? "";
         // Legacy "delivered" docs are shown as "claimed" (2-state model).
@@ -80,6 +85,7 @@ export function subscribeToPackages(
           courierPhone: data.courierPhone ?? null,
           courierNote: data.courierNote ?? "",
           createdAt: created ? created.toMillis() : null,
+          claimedAt: claimed ? claimed.toMillis() : null,
         };
       });
       onData(items);
@@ -106,6 +112,8 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     courierName: null,
     courierPhone: null,
     courierNote: "",
+    claimedAt: null,
+    expireAt: null,
     createdAt: serverTimestamp(),
   });
 }
@@ -120,6 +128,9 @@ export async function claimPackage(
     status: "claimed" as PackageStatus,
     courierName: courierName.trim(),
     courierPhone: courierPhone.trim(),
+    claimedAt: serverTimestamp(),
+    // Expiry stamp for Firestore's native TTL policy (deletes ~2 days after take).
+    expireAt: Timestamp.fromMillis(Date.now() + CLAIMED_TTL_MS),
   });
 }
 
@@ -145,10 +156,25 @@ export async function unclaimPackage(id: string): Promise<void> {
     courierName: null,
     courierPhone: null,
     courierNote: "",
+    claimedAt: null,
+    expireAt: null,
   });
 }
 
 export async function deletePackage(id: string): Promise<void> {
   const db = getDb();
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+// Client-side cleanup: remove packages that were taken more than CLAIMED_TTL_MS
+// ago. Runs whenever the board loads/refreshes, so no backend cron is needed.
+// Falls back to createdAt for legacy claimed docs without a claimedAt stamp.
+export async function purgeExpiredClaimed(items: PackageItem[]): Promise<void> {
+  const cutoff = Date.now() - CLAIMED_TTL_MS;
+  const expired = items.filter(
+    (it) =>
+      it.status === "claimed" &&
+      (it.claimedAt ?? it.createdAt ?? Infinity) < cutoff
+  );
+  await Promise.all(expired.map((it) => deletePackage(it.id)));
 }
