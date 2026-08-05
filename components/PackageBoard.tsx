@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import {
   claimManyPackages,
+  purgeExpiredClaimed,
   subscribeToPackages,
   unclaimPackage,
   type PackageItem,
@@ -82,6 +83,8 @@ export default function PackageBoard() {
       (data) => {
         setItems(data);
         setLoading(false);
+        // Auto-remove packages taken more than 2 days ago.
+        purgeExpiredClaimed(data).catch(() => {});
       },
       (err) => {
         setError(err.message);
@@ -201,7 +204,7 @@ export default function PackageBoard() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-800">
-        🎉 עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות!
+         עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות! 🎉
       </div>
 
       {/* Controls */}
