@@ -29,6 +29,7 @@ export default function PackageForm({
   const [ownerName, setOwnerName] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [urgent, setUrgent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +94,7 @@ export default function PackageForm({
         ownerName,
         ownerPhone,
         notes,
+        urgent,
       });
       onDone();
     } catch (err) {
@@ -254,6 +256,16 @@ export default function PackageForm({
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>
+
+      <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={urgent}
+          onChange={(e) => setUrgent(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300"
+        />
+        🔴 חבילה דחופה (צריך לאסוף בהקדם)
+      </label>
 
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
