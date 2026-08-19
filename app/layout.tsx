@@ -3,7 +3,7 @@ import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
 
 export const metadata: Metadata = {
-  title: "איסוף חבילות כרם רעים - כרם רעים",
+  title: "איסוף חבילות - כרם רעים",
   description:
     "פרסמו חבילות שצריך לאסוף, וסמנו את עצמכם כאוספים כשאתם בדרך לשם.",
   manifest: "/manifest.webmanifest",
@@ -42,7 +42,7 @@ export default function RootLayout({
                 />
                 <div>
                   <h1 className="text-lg font-bold leading-tight">
-                    איסוף חבילות כרם רעים - כרם רעים
+                    איסוף חבילות - כרם רעים
                   </h1>
                   <p className="text-xs text-slate-500">
                     פרסמו חבילה · אם אתם בדרך לשם תשתבצו ואספו את החבילות
