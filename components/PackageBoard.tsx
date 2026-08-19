@@ -16,16 +16,20 @@ import {
 } from "@/lib/locations";
 import { useIdentity } from "@/lib/identity";
 import {
+  bumpCollectorScore,
   incrementCollectedCount,
   subscribeToCollectedCount,
+  subscribeTopCollectors,
+  type CollectorScore,
 } from "@/lib/stats";
+import { toIntlPhone } from "@/lib/whatsapp";
 import Modal from "./Modal";
 import PackageForm from "./PackageForm";
 import ManageStores from "./ManageStores";
 import IdentityForm from "./IdentityForm";
 import PackageRow from "./PackageRow";
 
-type View = "available" | "claimed";
+type View = "available" | "claimed" | "mine";
 
 const NO_STORE = "ללא חנות";
 
@@ -70,9 +74,30 @@ export default function PackageBoard() {
   const [showIdentity, setShowIdentity] = useState(false);
   const [pendingTake, setPendingTake] = useState<PackageItem | null>(null);
   const [collectedCount, setCollectedCount] = useState(0);
+  const [topCollectors, setTopCollectors] = useState<CollectorScore[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
 
   const { identity, setIdentity } = useIdentity();
   const configured = isFirebaseConfigured;
+
+  const showToast = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast((cur) => (cur === message ? null : cur)), 3500);
+  };
+
+  const myPhone = identity?.phone ? toIntlPhone(identity.phone) : "";
+  // A package is "mine" if I posted it (owner) or I'm collecting it (courier).
+  const isMine = (it: PackageItem) => {
+    if (!identity) return false;
+    const byPhone =
+      !!myPhone &&
+      (toIntlPhone(it.ownerPhone) === myPhone ||
+        (!!it.courierPhone && toIntlPhone(it.courierPhone) === myPhone));
+    const byName =
+      !!identity.name &&
+      (it.ownerName === identity.name || it.courierName === identity.name);
+    return byPhone || byName;
+  };
 
   useEffect(() => {
     if (!configured) {
@@ -98,10 +123,14 @@ export default function PackageBoard() {
     const unsubStats = subscribeToCollectedCount((count) =>
       setCollectedCount(count)
     );
+    const unsubTop = subscribeTopCollectors(2, (list) =>
+      setTopCollectors(list.filter((c) => c.count > 0))
+    );
     return () => {
       unsubPkgs();
       unsubStores();
       unsubStats();
+      unsubTop();
     };
   }, [configured]);
 
@@ -115,6 +144,8 @@ export default function PackageBoard() {
     }
     claimManyPackages([item.id], identity.name, identity.phone);
     incrementCollectedCount(1);
+    bumpCollectorScore(identity.name, identity.phone, 1);
+    showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
   };
 
   // Releasing a claimed package ("לא מגיע בסוף") reverses the collect: it frees
@@ -122,6 +153,10 @@ export default function PackageBoard() {
   const releasePackage = (item: PackageItem) => {
     unclaimPackage(item.id);
     incrementCollectedCount(-1);
+    if (item.courierName || item.courierPhone) {
+      bumpCollectorScore(item.courierName || "", item.courierPhone || "", -1);
+    }
+    showToast("החבילה שוחררה וחזרה לרשימה");
   };
 
   const handleIdentitySave = (id: { name: string; phone: string }) => {
@@ -130,7 +165,9 @@ export default function PackageBoard() {
     if (pendingTake) {
       claimManyPackages([pendingTake.id], id.name, id.phone);
       incrementCollectedCount(1);
+      bumpCollectorScore(id.name, id.phone, 1);
       setPendingTake(null);
+      showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
     }
   };
 
@@ -143,10 +180,22 @@ export default function PackageBoard() {
     it.description.toLowerCase().includes(term) ||
     it.ownerName.toLowerCase().includes(term);
 
+  const counts = useMemo(() => {
+    const base = items.filter(
+      (it) => (!areaFilter || it.area === areaFilter) && matchesText(it)
+    );
+    return {
+      available: base.filter((i) => i.status === "available").length,
+      claimed: base.filter((i) => i.status === "claimed").length,
+      mine: base.filter((i) => isMine(i)).length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, areaFilter, term, identity]);
+
   const areaGroups = useMemo<AreaGroup[]>(() => {
     const filtered = items.filter(
       (it) =>
-        it.status === view &&
+        (view === "mine" ? isMine(it) : it.status === view) &&
         (!areaFilter || it.area === areaFilter) &&
         matchesText(it)
     );
@@ -173,7 +222,10 @@ export default function PackageBoard() {
       const pinnedNames = new Set(pinnedFor(area));
 
       const storeGroups: StoreGroup[] = Array.from(storeNames).map((name) => {
-        const list = areaPkgs.filter((p) => (p.store || NO_STORE) === name);
+        const list = areaPkgs
+          .filter((p) => (p.store || NO_STORE) === name)
+          // Urgent packages float to the top within each store.
+          .sort((a, b) => Number(b.urgent) - Number(a.urgent));
         return {
           name,
           items: list,
@@ -199,7 +251,7 @@ export default function PackageBoard() {
     }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, stores, view, areaFilter, term]);
+  }, [items, stores, view, areaFilter, term, identity]);
 
   return (
     <div className="space-y-6">
@@ -207,24 +259,54 @@ export default function PackageBoard() {
          עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות! 🎉
       </div>
 
+      {topCollectors.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+          <span className="font-bold text-amber-900">🏆 אלופי האיסוף:</span>
+          {topCollectors.map((c, i) => (
+            <span
+              key={c.id}
+              className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold text-amber-800 shadow-sm"
+            >
+              {i === 0 ? "🥇" : "🥈"} {c.name || "אלמוני"}
+              <span className="text-amber-500">·</span>
+              {c.count.toLocaleString("he-IL")}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
-            {(["available", "claimed"] as View[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  view === v
-                    ? "bg-brand-600 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {v === "available" ? "ממתין ללקיחה" : "נלקח"}
-              </button>
-            ))}
+            {(["available", "claimed", "mine"] as View[]).map((v) => {
+              const label =
+                v === "available"
+                  ? "ממתין ללקיחה"
+                  : v === "claimed"
+                  ? "נלקח"
+                  : "שלי";
+              const count =
+                v === "available"
+                  ? counts.available
+                  : v === "claimed"
+                  ? counts.claimed
+                  : counts.mine;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                    view === v
+                      ? "bg-brand-600 text-white"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              );
+            })}
           </div>
           <div className="flex items-center gap-2">
             {identity?.name ? (
@@ -304,7 +386,9 @@ export default function PackageBoard() {
               <p className="text-sm text-slate-500">
                 {view === "available"
                   ? "אין כרגע חבילות שממתינות ללקיחה."
-                  : "אין כרגע חבילות שנלקחו."}
+                  : view === "claimed"
+                  ? "אין כרגע חבילות שנלקחו."
+                  : "אין חבילות שקשורות אליך (שפרסמת או שאתם אוספים)."}
               </p>
             </div>
           ) : (
@@ -344,6 +428,7 @@ export default function PackageBoard() {
                               item={it}
                               onTake={takePackage}
                               onRelease={releasePackage}
+                              canManage={isMine(it)}
                             />
                           ))}
                         </ul>
@@ -362,7 +447,13 @@ export default function PackageBoard() {
         title="פרסום חבילה לאיסוף"
         onClose={() => setShowAdd(false)}
       >
-        <PackageForm stores={stores} onDone={() => setShowAdd(false)} />
+        <PackageForm
+          stores={stores}
+          onDone={() => {
+            setShowAdd(false);
+            showToast("החבילה פורסמה! 📦");
+          }}
+        />
       </Modal>
 
       <Modal
@@ -383,6 +474,14 @@ export default function PackageBoard() {
       >
         <IdentityForm initial={identity} onSave={handleIdentitySave} />
       </Modal>
+
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+          <div className="pointer-events-auto max-w-md rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white shadow-lg">
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

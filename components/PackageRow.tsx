@@ -7,6 +7,7 @@ import {
   type PackageItem,
 } from "@/lib/packages";
 import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
+import { timeAgo } from "@/lib/time";
 
 function WhatsappIcon() {
   return (
@@ -43,10 +44,12 @@ export default function PackageRow({
   item,
   onTake,
   onRelease,
+  canManage,
 }: {
   item: PackageItem;
   onTake: (item: PackageItem) => void;
   onRelease: (item: PackageItem) => void;
+  canManage: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
@@ -55,7 +58,11 @@ export default function PackageRow({
   const liClass =
     item.status === "claimed"
       ? "border border-amber-300 bg-amber-50"
+      : item.urgent
+      ? "border border-red-300 bg-red-50"
       : "bg-slate-50";
+
+  const created = timeAgo(item.createdAt);
 
   const saveNote = async () => {
     await setCourierNote(item.id, noteDraft);
@@ -67,6 +74,11 @@ export default function PackageRow({
       {/* Compact header (always visible) */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {item.urgent && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
+              🔴 דחוף
+            </span>
+          )}
           <span className="max-w-[200px] truncate font-medium" title={item.description}>
             {item.description || "חבילה"}
           </span>
@@ -82,6 +94,11 @@ export default function PackageRow({
               <span className="font-medium text-slate-700">
                 {item.ownerName}
               </span>
+            </span>
+          )}
+          {created && (
+            <span className="text-xs text-slate-400" title="מועד הפרסום">
+              · {created}
             </span>
           )}
         </div>
@@ -246,15 +263,17 @@ export default function PackageRow({
                 לא מגיע בסוף
               </button>
             )}
-            <button
-              type="button"
-              className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
-              onClick={() => {
-                if (confirm("למחוק את החבילה?")) deletePackage(item.id);
-              }}
-            >
-              מחיקה
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
+                onClick={() => {
+                  if (confirm("למחוק את החבילה?")) deletePackage(item.id);
+                }}
+              >
+                מחיקה
+              </button>
+            )}
           </div>
         </div>
       )}

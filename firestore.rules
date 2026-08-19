@@ -59,6 +59,12 @@ service cloud.firestore {
       allow write: if request.resource.data.collected is number;
     }
 
+    match /collectors/{collectorId} {
+      // Per-collector leaderboard scores.
+      allow read: if true;
+      allow write: if request.resource.data.count is number;
+    }
+
     match /stores/{storeId} {
 
       function validStore(data) {
