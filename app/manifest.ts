@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "איסוף חבילות - כרם רעים",
-    short_name: "איסוף חבילות",
+    name: "איסוף חבילות כרם רעים - כרם רעים",
+    short_name: "איסוף חבילות כרם רעים",
     description:
       "פרסמו חבילות שצריך לאסוף, וסמנו את עצמכם כאוספים כשאתם בדרך לשם.",
     start_url: "/",

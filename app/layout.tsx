@@ -3,15 +3,15 @@ import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
 
 export const metadata: Metadata = {
-  title: "איסוף חבילות - כרם רעים",
+  title: "איסוף חבילות כרם רעים - כרם רעים",
   description:
     "פרסמו חבילות שצריך לאסוף, וסמנו את עצמכם כאוספים כשאתם בדרך לשם.",
   manifest: "/manifest.webmanifest",
-  applicationName: "איסוף חבילות",
+  applicationName: "איסוף חבילות כרם רעים",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "איסוף חבילות",
+    title: "איסוף חבילות כרם רעים",
   },
 };
 
@@ -35,14 +35,14 @@ export default function RootLayout({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/icon-192.png"
-                  alt="איסוף חבילות"
+                  alt="איסוף חבילות כרם רעים"
                   className="h-9 w-9 rounded-lg"
                   width={36}
                   height={36}
                 />
                 <div>
                   <h1 className="text-lg font-bold leading-tight">
-                    איסוף חבילות - כרם רעים
+                    איסוף חבילות כרם רעים - כרם רעים
                   </h1>
                   <p className="text-xs text-slate-500">
                     פרסמו חבילה · אם אתם בדרך לשם תשתבצו ואספו את החבילות
