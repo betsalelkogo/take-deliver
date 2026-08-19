@@ -28,6 +28,7 @@ export interface PackageItem {
   courierName: string | null;
   courierPhone: string | null;
   courierNote: string;
+  urgent: boolean;
   createdAt: number | null;
   claimedAt: number | null;
 }
@@ -43,6 +44,7 @@ export interface NewPackageInput {
   ownerName: string;
   ownerPhone: string;
   notes: string;
+  urgent: boolean;
 }
 
 const COLLECTION = "packages";
@@ -84,6 +86,7 @@ export function subscribeToPackages(
           courierName: data.courierName ?? null,
           courierPhone: data.courierPhone ?? null,
           courierNote: data.courierNote ?? "",
+          urgent: data.urgent ?? false,
           createdAt: created ? created.toMillis() : null,
           claimedAt: claimed ? claimed.toMillis() : null,
         };
@@ -108,6 +111,7 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     ownerName: input.ownerName.trim(),
     ownerPhone: input.ownerPhone.trim(),
     notes: input.notes.trim(),
+    urgent: input.urgent ?? false,
     status: "available" as PackageStatus,
     courierName: null,
     courierPhone: null,
