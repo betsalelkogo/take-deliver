@@ -6,12 +6,14 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { ADHOC_AREA } from "./locations";
+import { readCollectState, writeCollectDelta } from "./stats";
 
 export type PackageStatus = "available" | "claimed";
 
@@ -126,15 +128,29 @@ export async function claimPackage(
   id: string,
   courierName: string,
   courierPhone: string
-): Promise<void> {
+): Promise<boolean> {
   const db = getDb();
-  await updateDoc(doc(db, COLLECTION, id), {
-    status: "claimed" as PackageStatus,
-    courierName: courierName.trim(),
-    courierPhone: courierPhone.trim(),
-    claimedAt: serverTimestamp(),
-    // Expiry stamp for Firestore's native TTL policy (deletes ~2 days after take).
-    expireAt: Timestamp.fromMillis(Date.now() + CLAIMED_TTL_MS),
+  const pkgRef = doc(db, COLLECTION, id);
+  const name = courierName.trim();
+  const phone = courierPhone.trim();
+
+  return runTransaction(db, async (tx) => {
+    const pkgSnap = await tx.get(pkgRef);
+    const data = pkgSnap.data();
+    if (!data) throw new Error("החבילה לא נמצאה");
+    if (data.status === "claimed") return false;
+
+    const collect = await readCollectState(tx, name, phone);
+
+    tx.update(pkgRef, {
+      status: "claimed" as PackageStatus,
+      courierName: name,
+      courierPhone: phone,
+      claimedAt: serverTimestamp(),
+      expireAt: Timestamp.fromMillis(Date.now() + CLAIMED_TTL_MS),
+    });
+    writeCollectDelta(tx, collect, name, 1);
+    return true;
   });
 }
 
@@ -153,15 +169,29 @@ export async function setCourierNote(id: string, note: string): Promise<void> {
   });
 }
 
-export async function unclaimPackage(id: string): Promise<void> {
+export async function unclaimPackage(id: string): Promise<boolean> {
   const db = getDb();
-  await updateDoc(doc(db, COLLECTION, id), {
-    status: "available" as PackageStatus,
-    courierName: null,
-    courierPhone: null,
-    courierNote: "",
-    claimedAt: null,
-    expireAt: null,
+  const pkgRef = doc(db, COLLECTION, id);
+
+  return runTransaction(db, async (tx) => {
+    const pkgSnap = await tx.get(pkgRef);
+    const data = pkgSnap.data();
+    if (!data || data.status !== "claimed") return false;
+
+    const name = (data.courierName as string) || "";
+    const phone = (data.courierPhone as string) || "";
+    const collect = await readCollectState(tx, name, phone);
+
+    tx.update(pkgRef, {
+      status: "available" as PackageStatus,
+      courierName: null,
+      courierPhone: null,
+      courierNote: "",
+      claimedAt: null,
+      expireAt: null,
+    });
+    writeCollectDelta(tx, collect, name, -1);
+    return true;
   });
 }
 

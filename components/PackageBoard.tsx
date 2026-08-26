@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import {
-  claimManyPackages,
+  claimPackage,
   purgeExpiredClaimed,
   subscribeToPackages,
   unclaimPackage,
@@ -16,10 +16,10 @@ import {
 } from "@/lib/locations";
 import { useIdentity } from "@/lib/identity";
 import {
-  bumpCollectorScore,
-  incrementCollectedCount,
+  collectorId,
+  rankCollectors,
+  subscribeCollectors,
   subscribeToCollectedCount,
-  subscribeTopCollectors,
   type CollectorScore,
 } from "@/lib/stats";
 import { toIntlPhone } from "@/lib/whatsapp";
@@ -44,6 +44,45 @@ interface AreaGroup {
   area: string;
   stores: StoreGroup[];
   total: number;
+}
+
+function PodiumPlace({
+  place,
+  collector,
+}: {
+  place: 1 | 2 | 3;
+  collector: CollectorScore;
+}) {
+  const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
+  const card =
+    place === 1
+      ? "min-w-[7.5rem] border-amber-300 from-amber-50 to-amber-200 pb-4 pt-3"
+      : place === 2
+        ? "min-w-[6.5rem] border-slate-300 from-slate-50 to-slate-200 pb-3 pt-2"
+        : "min-w-[6.5rem] border-orange-300 from-orange-50 to-orange-200 pb-2 pt-2";
+  const step =
+    place === 1 ? "h-10 bg-amber-400" : place === 2 ? "h-7 bg-slate-400" : "h-5 bg-orange-400";
+
+  return (
+    <div className="flex w-[7.5rem] flex-col items-center sm:w-32">
+      <div
+        className={`flex w-full flex-col items-center rounded-t-xl border bg-gradient-to-b px-2 shadow-sm ${card}`}
+      >
+        <span className={place === 1 ? "text-3xl" : "text-2xl"}>{medal}</span>
+        <span
+          dir="rtl"
+          className="max-w-full truncate text-center text-sm font-bold text-slate-800"
+          title={collector.name}
+        >
+          {collector.name || "אלמוני"}
+        </span>
+        <span dir="rtl" className="text-xs font-semibold text-slate-600">
+          {collector.count.toLocaleString("he-IL")} חבילות
+        </span>
+      </div>
+      <div className={`w-full rounded-b-md ${step}`} />
+    </div>
+  );
 }
 
 function SetupNotice() {
@@ -123,9 +162,7 @@ export default function PackageBoard() {
     const unsubStats = subscribeToCollectedCount((count) =>
       setCollectedCount(count)
     );
-    const unsubTop = subscribeTopCollectors(2, (list) =>
-      setTopCollectors(list.filter((c) => c.count > 0))
-    );
+    const unsubTop = subscribeCollectors((list) => setTopCollectors(list));
     return () => {
       unsubPkgs();
       unsubStores();
@@ -136,38 +173,53 @@ export default function PackageBoard() {
 
   // Per-package take: claim it (the collector then taps the WhatsApp button
   // on the package to notify the owner from their own WhatsApp).
-  const takePackage = (item: PackageItem) => {
+  const takePackage = async (item: PackageItem) => {
     if (!identity?.name) {
       setPendingTake(item);
       setShowIdentity(true);
       return;
     }
-    claimManyPackages([item.id], identity.name, identity.phone);
-    incrementCollectedCount(1);
-    bumpCollectorScore(identity.name, identity.phone, 1);
-    showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
-  };
-
-  // Releasing a claimed package ("לא מגיע בסוף") reverses the collect: it frees
-  // the package again and rolls the all-time counter back by one.
-  const releasePackage = (item: PackageItem) => {
-    unclaimPackage(item.id);
-    incrementCollectedCount(-1);
-    if (item.courierName || item.courierPhone) {
-      bumpCollectorScore(item.courierName || "", item.courierPhone || "", -1);
+    try {
+      const counted = await claimPackage(item.id, identity.name, identity.phone);
+      showToast(
+        counted
+          ? "נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇"
+          : "החבילה כבר נלקחה"
+      );
+    } catch {
+      showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
     }
-    showToast("החבילה שוחררה וחזרה לרשימה");
   };
 
-  const handleIdentitySave = (id: { name: string; phone: string }) => {
+  // Releasing a claimed package ("התחרטתי") reverses the collect: it frees
+  // the package again and rolls the total + collector score back by one.
+  const releasePackage = async (item: PackageItem) => {
+    try {
+      const reverted = await unclaimPackage(item.id);
+      showToast(
+        reverted ? "החבילה שוחררה וחזרה לרשימה" : "החבילה כבר שוחררה"
+      );
+    } catch {
+      showToast("לא הצלחנו לבטל את הלקיחה, נסו שוב");
+    }
+  };
+
+  const handleIdentitySave = async (id: { name: string; phone: string }) => {
     setIdentity(id);
     setShowIdentity(false);
     if (pendingTake) {
-      claimManyPackages([pendingTake.id], id.name, id.phone);
-      incrementCollectedCount(1);
-      bumpCollectorScore(id.name, id.phone, 1);
+      const pkg = pendingTake;
       setPendingTake(null);
-      showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
+      try {
+        const counted = await claimPackage(pkg.id, id.name, id.phone);
+        showToast(
+          counted
+            ? "נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇"
+            : "החבילה כבר נלקחה"
+        );
+      } catch {
+        showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
+      }
     }
   };
 
@@ -179,6 +231,22 @@ export default function PackageBoard() {
     it.store.toLowerCase().includes(term) ||
     it.description.toLowerCase().includes(term) ||
     it.ownerName.toLowerCase().includes(term);
+
+  const champions = useMemo(() => {
+    const liveById = new Map<string, CollectorScore>();
+    for (const it of items) {
+      if (it.status !== "claimed") continue;
+      const id = collectorId(it.courierName || "", it.courierPhone || "");
+      if (!id) continue;
+      const prev = liveById.get(id);
+      liveById.set(id, {
+        id,
+        name: (it.courierName || prev?.name || "").trim(),
+        count: (prev?.count ?? 0) + 1,
+      });
+    }
+    return rankCollectors(topCollectors, Array.from(liveById.values()), 3);
+  }, [items, topCollectors]);
 
   const counts = useMemo(() => {
     const base = items.filter(
@@ -259,19 +327,25 @@ export default function PackageBoard() {
          עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות! 🎉
       </div>
 
-      {topCollectors.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-          <span className="font-bold text-amber-900">🏆 אלופי האיסוף:</span>
-          {topCollectors.map((c, i) => (
-            <span
-              key={c.id}
-              className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-semibold text-amber-800 shadow-sm"
-            >
-              {i === 0 ? "🥇" : "🥈"} {c.name || "אלמוני"}
-              <span className="text-amber-500">·</span>
-              {c.count.toLocaleString("he-IL")}
-            </span>
-          ))}
+      {champions.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+          <p className="mb-3 text-center text-sm font-bold text-amber-900">
+            🏆 אלופי האיסוף
+          </p>
+          <div
+            className="flex items-end justify-center gap-2 sm:gap-3"
+            dir="ltr"
+          >
+            {champions[1] && (
+              <PodiumPlace place={2} collector={champions[1]} />
+            )}
+            {champions[0] && (
+              <PodiumPlace place={1} collector={champions[0]} />
+            )}
+            {champions[2] && (
+              <PodiumPlace place={3} collector={champions[2]} />
+            )}
+          </div>
         </div>
       )}
 

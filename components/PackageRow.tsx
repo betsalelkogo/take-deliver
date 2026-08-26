@@ -123,22 +123,33 @@ export default function PackageRow({
         </div>
       </div>
 
-      {/* Collector line (visible even when collapsed) */}
-      {item.status === "claimed" && (item.courierName || item.courierPhone) && (
-        <p className="mt-1.5 inline-flex flex-wrap items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-800">
-          🚶 נלקח ע״י {item.courierName || "אוסף החבילה"}
-          {item.courierPhone && (
-            <>
-              {" · "}
-              <a
-                className="font-medium hover:underline"
-                href={`tel:${item.courierPhone}`}
-              >
-                {item.courierPhone}
-              </a>
-            </>
+      {/* Collector line + undo (visible even when collapsed) */}
+      {item.status === "claimed" && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {(item.courierName || item.courierPhone) && (
+            <p className="inline-flex flex-wrap items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-800">
+              🚶 נלקח ע״י {item.courierName || "אוסף החבילה"}
+              {item.courierPhone && (
+                <>
+                  {" · "}
+                  <a
+                    className="font-medium hover:underline"
+                    href={`tel:${item.courierPhone}`}
+                  >
+                    {item.courierPhone}
+                  </a>
+                </>
+              )}
+            </p>
           )}
-        </p>
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1 text-xs"
+            onClick={() => onRelease(item)}
+          >
+            התחרטתי
+          </button>
+        </div>
       )}
 
       {/* WhatsApp buttons (tap to send from your own WhatsApp) */}
@@ -254,15 +265,6 @@ export default function PackageRow({
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-1">
-            {item.status === "claimed" && (
-              <button
-                type="button"
-                className="btn-ghost px-3 py-1 text-xs"
-                onClick={() => onRelease(item)}
-              >
-                לא מגיע בסוף
-              </button>
-            )}
             {canManage && (
               <button
                 type="button"
