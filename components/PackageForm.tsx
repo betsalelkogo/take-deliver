@@ -1,24 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPackage } from "@/lib/packages";
 import {
-  ADHOC_AREA,
   ALL_AREAS,
   createStore,
   isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
 import { isValidPhone } from "@/lib/whatsapp";
+import type { Identity } from "@/lib/identity";
 
 const NEW_STORE = "__new__";
 
 export default function PackageForm({
   stores,
   onDone,
+  identity,
+  onIdentitySave,
 }: {
   stores: StoreItem[];
   onDone: () => void;
+  identity: Identity | null;
+  onIdentitySave: (identity: Identity) => void;
 }) {
   const [area, setArea] = useState<string>("");
   const [store, setStore] = useState<string>("");
@@ -26,12 +30,18 @@ export default function PackageForm({
   const [pinStore, setPinStore] = useState(true);
   const [description, setDescription] = useState("");
   const [packageNumber, setPackageNumber] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [ownerPhone, setOwnerPhone] = useState("");
+  const [ownerName, setOwnerName] = useState(identity?.name ?? "");
+  const [ownerPhone, setOwnerPhone] = useState(identity?.phone ?? "");
   const [notes, setNotes] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!identity) return;
+    setOwnerName((n) => n || identity.name);
+    setOwnerPhone((p) => p || identity.phone);
+  }, [identity]);
 
   const adhoc = isAdhocArea(area);
 
@@ -96,6 +106,7 @@ export default function PackageForm({
         notes,
         urgent,
       });
+      onIdentitySave({ name: ownerName.trim(), phone: ownerPhone.trim() });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש.");
@@ -246,6 +257,11 @@ export default function PackageForm({
           />
         </div>
       </div>
+      {identity?.name && identity?.phone && (
+        <p className="-mt-2 text-xs text-slate-400">
+          מולא אוטומטית מ«מי אני?» — אפשר לערוך אם צריך.
+        </p>
+      )}
 
       <div>
         <label className="label">הערות</label>
