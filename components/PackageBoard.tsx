@@ -536,6 +536,8 @@ export default function PackageBoard() {
       >
         <PackageForm
           stores={stores}
+          identity={identity}
+          onIdentitySave={setIdentity}
           onDone={() => {
             setShowAdd(false);
             showToast("החבילה פורסמה! 📦");
