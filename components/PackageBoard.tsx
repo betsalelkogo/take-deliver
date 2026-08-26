@@ -56,27 +56,33 @@ function PodiumPlace({
   const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
   const card =
     place === 1
-      ? "min-w-[7.5rem] border-amber-300 from-amber-50 to-amber-200 pb-4 pt-3"
+      ? "border-amber-300 from-amber-50 to-amber-200 pb-3 pt-2 sm:pb-4 sm:pt-3"
       : place === 2
-        ? "min-w-[6.5rem] border-slate-300 from-slate-50 to-slate-200 pb-3 pt-2"
-        : "min-w-[6.5rem] border-orange-300 from-orange-50 to-orange-200 pb-2 pt-2";
+        ? "border-slate-300 from-slate-50 to-slate-200 pb-2 pt-1.5 sm:pb-3 sm:pt-2"
+        : "border-orange-300 from-orange-50 to-orange-200 pb-1.5 pt-1.5 sm:pb-2 sm:pt-2";
   const step =
-    place === 1 ? "h-10 bg-amber-400" : place === 2 ? "h-7 bg-slate-400" : "h-5 bg-orange-400";
+    place === 1
+      ? "h-7 bg-amber-400 sm:h-10"
+      : place === 2
+        ? "h-5 bg-slate-400 sm:h-7"
+        : "h-4 bg-orange-400 sm:h-5";
 
   return (
-    <div className="flex w-[7.5rem] flex-col items-center sm:w-32">
+    <div className="flex min-w-0 flex-1 basis-0 flex-col items-center">
       <div
-        className={`flex w-full flex-col items-center rounded-t-xl border bg-gradient-to-b px-2 shadow-sm ${card}`}
+        className={`flex w-full flex-col items-center rounded-t-xl border bg-gradient-to-b px-1 shadow-sm sm:px-2 ${card}`}
       >
-        <span className={place === 1 ? "text-3xl" : "text-2xl"}>{medal}</span>
+        <span className={place === 1 ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"}>
+          {medal}
+        </span>
         <span
           dir="rtl"
-          className="max-w-full truncate text-center text-sm font-bold text-slate-800"
+          className="max-w-full truncate text-center text-xs font-bold text-slate-800 sm:text-sm"
           title={collector.name}
         >
           {collector.name || "אלמוני"}
         </span>
-        <span dir="rtl" className="text-xs font-semibold text-slate-600">
+        <span dir="rtl" className="text-[11px] font-semibold text-slate-600 sm:text-xs">
           {collector.count.toLocaleString("he-IL")} חבילות
         </span>
       </div>
@@ -322,18 +328,18 @@ export default function PackageBoard() {
   }, [items, stores, view, areaFilter, term, identity]);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-800">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center text-sm font-semibold text-emerald-800 sm:px-4">
          עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות! 🎉
       </div>
 
       {champions.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-2 py-3 sm:px-4 sm:py-4">
           <p className="mb-3 text-center text-sm font-bold text-amber-900">
             🏆 אלופי האיסוף
           </p>
           <div
-            className="flex items-end justify-center gap-2 sm:gap-3"
+            className="mx-auto flex w-full max-w-md items-end justify-center gap-1 sm:gap-3"
             dir="ltr"
           >
             {champions[1] && (
@@ -351,8 +357,8 @@ export default function PackageBoard() {
 
       {/* Controls */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex w-full rounded-lg border border-slate-300 bg-white p-0.5 sm:inline-flex sm:w-auto">
             {(["available", "claimed", "mine"] as View[]).map((v) => {
               const label =
                 v === "available"
@@ -360,6 +366,8 @@ export default function PackageBoard() {
                   : v === "claimed"
                   ? "נלקח"
                   : "שלי";
+              const shortLabel =
+                v === "available" ? "ממתין" : v === "claimed" ? "נלקח" : "שלי";
               const count =
                 v === "available"
                   ? counts.available
@@ -371,13 +379,18 @@ export default function PackageBoard() {
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  className={`min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-3 sm:py-1.5 sm:text-sm ${
                     view === v
                       ? "bg-brand-600 text-white"
                       : "text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  {label} ({count})
+                  <span className="sm:hidden">
+                    {shortLabel} ({count})
+                  </span>
+                  <span className="hidden sm:inline">
+                    {label} ({count})
+                  </span>
                 </button>
               );
             })}
@@ -386,7 +399,7 @@ export default function PackageBoard() {
             {identity?.name ? (
               <button
                 type="button"
-                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+                className="max-w-full truncate rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
                 onClick={() => setShowIdentity(true)}
               >
                 אני: <span className="font-semibold">{identity.name}</span> ✎
@@ -403,10 +416,10 @@ export default function PackageBoard() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <select
-              className="input w-auto"
+              className="input w-full sm:w-auto"
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value)}
             >
@@ -418,23 +431,23 @@ export default function PackageBoard() {
               ))}
             </select>
             <input
-              className="input sm:w-64"
+              className="input w-full sm:w-64"
               placeholder="חיפוש לפי חנות, פריט, שם…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary w-full sm:w-auto"
               onClick={() => setShowManage(true)}
             >
               ניהול חנויות
             </button>
             <button
               type="button"
-              className="btn-primary"
+              className="btn-primary w-full sm:w-auto"
               onClick={() => setShowAdd(true)}
             >
               + פרסום חבילה
@@ -472,7 +485,7 @@ export default function PackageBoard() {
                   key={area.area}
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-3 py-3 sm:px-4">
                     <div className="flex items-center gap-2">
                       <span className="text-base font-bold text-brand-900">
                         📍 {area.area}
@@ -485,7 +498,7 @@ export default function PackageBoard() {
 
                   <div className="divide-y divide-slate-100">
                     {area.stores.map((store) => (
-                      <div key={store.name} className="px-4 py-3">
+                      <div key={store.name} className="px-3 py-3 sm:px-4">
                         <div className="mb-2 flex items-center gap-2">
                           <span className="font-semibold">
                             {store.pinned ? "📌 " : "🏬 "}
@@ -550,8 +563,8 @@ export default function PackageBoard() {
       </Modal>
 
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-          <div className="pointer-events-auto max-w-md rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white shadow-lg">
+        <div className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-3 sm:px-4 bottom-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="pointer-events-auto mx-3 max-w-md rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white shadow-lg">
             {toast}
           </div>
         </div>

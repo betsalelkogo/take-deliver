@@ -70,16 +70,16 @@ export default function PackageRow({
   };
 
   return (
-    <li className={`rounded-lg px-3 py-2 ${liClass}`}>
+    <li className={`rounded-lg px-2 py-2 sm:px-3 ${liClass}`}>
       {/* Compact header (always visible) */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {item.urgent && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
               🔴 דחוף
             </span>
           )}
-          <span className="max-w-[200px] truncate font-medium" title={item.description}>
+          <span className="min-w-0 max-w-full truncate font-medium sm:max-w-[240px]" title={item.description}>
             {item.description || "חבילה"}
           </span>
           {item.packageNumber && (
