@@ -7,6 +7,8 @@ export function toIntlPhone(phone: string): string {
   if (!digits) return "";
   if (digits.startsWith("972")) return digits;
   if (digits.startsWith("0")) return "972" + digits.slice(1);
+  // Local mobile typed without a leading 0 (e.g. 501234567).
+  if (digits.length === 9 && digits.startsWith("5")) return "972" + digits;
   return digits;
 }
 
