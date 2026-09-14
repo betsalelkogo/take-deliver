@@ -24,7 +24,7 @@ body {
 }
 
 .btn {
-  @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition touch-manipulation disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition touch-manipulation active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100;
 }
 
 .btn-primary {
@@ -37,4 +37,343 @@ body {
 
 .btn-ghost {
   @apply btn text-slate-500 hover:bg-slate-100 hover:text-slate-700;
+}
+
+/* Height expand/collapse without JS measuring. */
+.expand {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+
+.expand > .expand-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.expand-open {
+  grid-template-rows: 1fr;
+}
+
+.package-row {
+  transition:
+    background-color 280ms ease,
+    border-color 280ms ease,
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.package-row-exit {
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+/* Package-into-truck take button */
+.take-btn {
+  @apply relative isolate overflow-hidden bg-brand-600 text-white hover:bg-brand-700;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+.take-btn-label,
+.take-btn-done {
+  position: relative;
+  z-index: 2;
+  transition: opacity 160ms ease;
+}
+
+.take-btn-done {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.take-btn-stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 1;
+  width: 200px;
+  margin-left: -100px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.take-btn-box {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 15px;
+  height: 13px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  opacity: 0;
+  transform: translateX(-22px);
+}
+
+.take-btn-box::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 3px;
+  background: #f59e0b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.take-btn-truck {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 54px;
+  height: 24px;
+  margin-top: -13px;
+  transform: translateX(16px);
+}
+
+.take-btn-bed {
+  position: absolute;
+  left: 0;
+  bottom: 5px;
+  width: 30px;
+  height: 15px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
+  box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.take-btn-door {
+  position: absolute;
+  left: 0;
+  bottom: 5px;
+  width: 4px;
+  height: 15px;
+  border-radius: 1px;
+  background: #cbd5e1;
+  transform-origin: left center;
+  box-shadow: inset 0 0 0 1px #fff;
+}
+
+.take-btn-cab {
+  position: absolute;
+  left: 29px;
+  bottom: 5px;
+  width: 20px;
+  height: 17px;
+  border-radius: 2px 5px 2px 2px;
+  background: #fff;
+}
+
+.take-btn-cab::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  right: 3px;
+  height: 7px;
+  border-radius: 1px 4px 2px 1px;
+  background: #7dd3fc;
+}
+
+.take-btn-cab::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: -3px;
+  width: 4px;
+  height: 3px;
+  border-radius: 999px;
+  background: #fde047;
+  box-shadow: 0 5px 0 #fde047;
+}
+
+.take-btn-wheel {
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #0f172a;
+  box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 3px #334155;
+}
+
+.take-btn-wheel-l {
+  left: 6px;
+}
+
+.take-btn-wheel-r {
+  left: 34px;
+}
+
+.take-btn-lines {
+  position: absolute;
+  top: 14px;
+  left: 100%;
+  width: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  box-shadow:
+    16px 8px 0 rgba(255, 255, 255, 0.7),
+    32px 2px 0 rgba(255, 255, 255, 0.55),
+    48px 10px 0 rgba(255, 255, 255, 0.7),
+    64px 4px 0 rgba(255, 255, 255, 0.5);
+}
+
+.take-btn-go,
+.take-btn-go:disabled {
+  min-width: 11rem;
+  opacity: 1;
+}
+
+.take-btn-go .take-btn-label {
+  opacity: 0;
+}
+
+.take-btn-go .take-btn-box {
+  animation: take-box 2.8s ease forwards;
+}
+
+.take-btn-go .take-btn-truck {
+  animation: take-truck 2.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.take-btn-go .take-btn-door {
+  animation: take-door 2.8s ease forwards;
+}
+
+.take-btn-go .take-btn-wheel {
+  animation: take-wheel 2.8s linear forwards;
+}
+
+.take-btn-go .take-btn-lines {
+  animation: take-lines 2.8s ease forwards;
+}
+
+.take-btn-go .take-btn-done {
+  animation: take-done 2.8s ease forwards;
+}
+
+@keyframes take-truck {
+  0% {
+    transform: translateX(18px);
+  }
+  12%,
+  58% {
+    transform: translateX(-118px);
+  }
+  100% {
+    transform: translateX(-280px);
+  }
+}
+
+@keyframes take-box {
+  0% {
+    transform: translateX(-22px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  20%,
+  52% {
+    transform: translateX(82px);
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(94px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(94px);
+    opacity: 0;
+  }
+}
+
+@keyframes take-door {
+  0%,
+  10% {
+    transform: rotate(0deg);
+  }
+  16%,
+  52% {
+    transform: rotate(-48deg);
+  }
+  62%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes take-wheel {
+  0%,
+  58% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(-520deg);
+  }
+}
+
+@keyframes take-lines {
+  0%,
+  60% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  68%,
+  84% {
+    opacity: 1;
+    transform: translateX(-140px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-220px);
+  }
+}
+
+@keyframes take-done {
+  0%,
+  78% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  88%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    @apply active:scale-100;
+  }
+
+  .expand,
+  .package-row {
+    transition: none;
+  }
+
+  .package-row-exit {
+    transform: none;
+  }
+
+  .take-btn-stage,
+  .take-btn-done {
+    display: none;
+  }
+
+  .take-btn-go .take-btn-label {
+    opacity: 1;
+  }
 }

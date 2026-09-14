@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import {
   claimPackage,
@@ -27,11 +27,24 @@ import Modal from "./Modal";
 import PackageForm from "./PackageForm";
 import ManageStores from "./ManageStores";
 import IdentityForm from "./IdentityForm";
-import PackageRow from "./PackageRow";
+import PackageRow, { type TakeResult } from "./PackageRow";
+import { TAKE_TRUCK_MS, prefersReducedMotion } from "./TakeButton";
+import Toast from "./Toast";
+import AnimatedCount from "./AnimatedCount";
+import BoardSkeleton from "./BoardSkeleton";
 
 type View = "available" | "claimed" | "mine";
+type ExitKind = "claim" | "release";
 
 const NO_STORE = "ללא חנות";
+const ROW_EXIT_MS = 380;
+
+interface ExitingRow {
+  id: string;
+  item: PackageItem;
+  kind: ExitKind;
+  fade: boolean;
+}
 
 interface StoreGroup {
   name: string;
@@ -44,6 +57,54 @@ interface AreaGroup {
   area: string;
   stores: StoreGroup[];
   total: number;
+}
+
+function injectExiting(
+  groups: AreaGroup[],
+  exiting: ExitingRow[],
+  view: View
+): AreaGroup[] {
+  const relevant = exiting.filter((row) =>
+    view === "available"
+      ? row.kind === "claim"
+      : view === "claimed"
+        ? row.kind === "release"
+        : false
+  );
+  if (relevant.length === 0) return groups;
+
+  const overlay = new Map(relevant.map((row) => [row.id, row.item]));
+  const next: AreaGroup[] = groups.map((group) => ({
+    ...group,
+    stores: group.stores.map((store) => ({
+      ...store,
+      items: store.items.map((item) => overlay.get(item.id) ?? item),
+    })),
+  }));
+
+  for (const { item } of relevant) {
+    const storeName = item.store || NO_STORE;
+    let area = next.find((group) => group.area === item.area);
+    if (!area) {
+      area = { area: item.area, stores: [], total: 0 };
+      next.push(area);
+    }
+    let store = area.stores.find((s) => s.name === storeName);
+    if (!store) {
+      store = {
+        name: storeName,
+        items: [],
+        availableIds: [],
+        pinned: false,
+      };
+      area.stores.push(store);
+    }
+    if (!store.items.some((existing) => existing.id === item.id)) {
+      store.items.push(item);
+      area.total += 1;
+    }
+  }
+  return next;
 }
 
 function PodiumPlace({
@@ -121,9 +182,47 @@ export default function PackageBoard() {
   const [collectedCount, setCollectedCount] = useState(0);
   const [topCollectors, setTopCollectors] = useState<CollectorScore[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [exiting, setExiting] = useState<ExitingRow[]>([]);
+  const [celebratingId, setCelebratingId] = useState<string | null>(null);
+  const mounted = useRef(true);
 
   const { identity, setIdentity } = useIdentity();
   const configured = isFirebaseConfigured;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const markExit = (item: PackageItem, kind: ExitKind) => {
+    setExiting((prev) => [
+      ...prev.filter((row) => row.id !== item.id),
+      { id: item.id, item, kind, fade: true },
+    ]);
+    window.setTimeout(() => {
+      if (!mounted.current) return;
+      setExiting((prev) => prev.filter((row) => row.id !== item.id));
+    }, ROW_EXIT_MS);
+  };
+
+  const celebrateClaim = (available: PackageItem, claimed: PackageItem) => {
+    if (prefersReducedMotion() || view !== "available") {
+      if (view === "available") markExit(claimed, "claim");
+      return;
+    }
+    setCelebratingId(available.id);
+    setExiting((prev) => [
+      ...prev.filter((row) => row.id !== available.id),
+      { id: available.id, item: available, kind: "claim", fade: false },
+    ]);
+    window.setTimeout(() => {
+      if (!mounted.current) return;
+      setCelebratingId((id) => (id === available.id ? null : id));
+      markExit(claimed, "claim");
+    }, TAKE_TRUCK_MS);
+  };
 
   const showToast = (message: string) => {
     setToast(message);
@@ -179,21 +278,34 @@ export default function PackageBoard() {
 
   // Per-package take: claim it (the collector then taps the WhatsApp button
   // on the package to notify the owner from their own WhatsApp).
-  const takePackage = async (item: PackageItem) => {
+  const takePackage = async (item: PackageItem): Promise<TakeResult> => {
     if (!identity?.name) {
       setPendingTake(item);
       setShowIdentity(true);
-      return;
+      return "skipped";
     }
     try {
       const counted = await claimPackage(item.id, identity.name, identity.phone);
-      showToast(
-        counted
-          ? "נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇"
-          : "החבילה כבר נלקחה"
-      );
+      if (counted) {
+        celebrateClaim(item, {
+          ...item,
+          status: "claimed",
+          courierName: identity.name,
+          courierPhone: identity.phone,
+          claimedAt: Date.now(),
+        });
+        const delay = prefersReducedMotion() ? 0 : TAKE_TRUCK_MS;
+        window.setTimeout(() => {
+          if (!mounted.current) return;
+          showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
+        }, delay);
+        return "claimed";
+      }
+      showToast("החבילה כבר נלקחה");
+      return "failed";
     } catch {
       showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
+      return "failed";
     }
   };
 
@@ -202,6 +314,9 @@ export default function PackageBoard() {
   const releasePackage = async (item: PackageItem) => {
     try {
       const reverted = await unclaimPackage(item.id);
+      if (reverted && view === "claimed") {
+        markExit(item, "release");
+      }
       showToast(
         reverted ? "החבילה שוחררה וחזרה לרשימה" : "החבילה כבר שוחררה"
       );
@@ -218,11 +333,22 @@ export default function PackageBoard() {
       setPendingTake(null);
       try {
         const counted = await claimPackage(pkg.id, id.name, id.phone);
-        showToast(
-          counted
-            ? "נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇"
-            : "החבילה כבר נלקחה"
-        );
+        if (counted) {
+          celebrateClaim(pkg, {
+            ...pkg,
+            status: "claimed",
+            courierName: id.name,
+            courierPhone: id.phone,
+            claimedAt: Date.now(),
+          });
+          const delay = prefersReducedMotion() ? 0 : TAKE_TRUCK_MS;
+          window.setTimeout(() => {
+            if (!mounted.current) return;
+            showToast("נלקח! אל תשכחו לשלוח הודעה לבעל/ת החבילה 👇");
+          }, delay);
+        } else {
+          showToast("החבילה כבר נלקחה");
+        }
       } catch {
         showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
       }
@@ -327,10 +453,19 @@ export default function PackageBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, stores, view, areaFilter, term, identity]);
 
+  const displayGroups = useMemo(
+    () => injectExiting(areaGroups, exiting, view),
+    [areaGroups, exiting, view]
+  );
+  const fadingIds = useMemo(
+    () => new Set(exiting.filter((row) => row.fade).map((row) => row.id)),
+    [exiting]
+  );
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center text-sm font-semibold text-emerald-800 sm:px-4">
-         עד היום נאספו {Math.max(0, collectedCount).toLocaleString("he-IL")} חבילות! 🎉
+         עד היום נאספו <AnimatedCount value={Math.max(0, collectedCount)} /> חבילות! 🎉
       </div>
 
       {champions.length > 0 && (
@@ -467,8 +602,8 @@ export default function PackageBoard() {
           )}
 
           {loading ? (
-            <p className="text-sm text-slate-500">טוען חבילות…</p>
-          ) : areaGroups.length === 0 ? (
+            <BoardSkeleton />
+          ) : displayGroups.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <p className="text-sm text-slate-500">
                 {view === "available"
@@ -480,7 +615,7 @@ export default function PackageBoard() {
             </div>
           ) : (
             <div className="space-y-5">
-              {areaGroups.map((area) => (
+              {displayGroups.map((area) => (
                 <section
                   key={area.area}
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
@@ -516,6 +651,8 @@ export default function PackageBoard() {
                               onTake={takePackage}
                               onRelease={releasePackage}
                               canManage={isMine(it)}
+                              exiting={fadingIds.has(it.id)}
+                              celebrateTake={celebratingId === it.id}
                             />
                           ))}
                         </ul>
@@ -564,13 +701,7 @@ export default function PackageBoard() {
         <IdentityForm initial={identity} onSave={handleIdentitySave} />
       </Modal>
 
-      {toast && (
-        <div className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-3 sm:px-4 bottom-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="pointer-events-auto mx-3 max-w-md rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white shadow-lg">
-            {toast}
-          </div>
-        </div>
-      )}
+      <Toast message={toast} />
     </div>
   );
 }

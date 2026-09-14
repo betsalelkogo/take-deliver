@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import TakeButton from "./TakeButton";
 import {
   deletePackage,
   setCourierNote,
@@ -8,6 +9,8 @@ import {
 } from "@/lib/packages";
 import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
 import { timeAgo } from "@/lib/time";
+
+export type TakeResult = "claimed" | "skipped" | "failed";
 
 function WhatsappIcon() {
   return (
@@ -22,6 +25,14 @@ function WhatsappIcon() {
   );
 }
 
+function haptic(ms = 15) {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    // unsupported or blocked
+  }
+}
+
 function StatusBadge({ status }: { status: PackageItem["status"] }) {
   const cls: Record<PackageItem["status"], string> = {
     available: "bg-emerald-100 text-emerald-700",
@@ -33,7 +44,7 @@ function StatusBadge({ status }: { status: PackageItem["status"] }) {
   };
   return (
     <span
-      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls[status]}`}
+      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${cls[status]}`}
     >
       {label[status]}
     </span>
@@ -45,22 +56,28 @@ export default function PackageRow({
   onTake,
   onRelease,
   canManage,
+  exiting = false,
+  celebrateTake = false,
 }: {
   item: PackageItem;
-  onTake: (item: PackageItem) => void;
-  onRelease: (item: PackageItem) => void;
+  onTake: (item: PackageItem) => void | Promise<TakeResult>;
+  onRelease: (item: PackageItem) => void | Promise<void>;
   canManage: boolean;
+  exiting?: boolean;
+  celebrateTake?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState(item.courierNote);
+  const [busy, setBusy] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
-  const liClass =
-    item.status === "claimed"
-      ? "border border-amber-300 bg-amber-50"
-      : item.urgent
+  const claimed = item.status === "claimed";
+  const liClass = claimed
+    ? "border border-amber-300 bg-amber-50"
+    : item.urgent
       ? "border border-red-300 bg-red-50"
-      : "bg-slate-50";
+      : "border border-transparent bg-slate-50";
 
   const created = timeAgo(item.createdAt);
 
@@ -69,8 +86,43 @@ export default function PackageRow({
     setEditingNote(false);
   };
 
+  useEffect(() => {
+    if (celebrateTake) setPlaying(true);
+  }, [celebrateTake]);
+
+  const handleTake = async () => {
+    if (busy || exiting || playing) return;
+    setBusy(true);
+    haptic(15);
+    try {
+      const result = await onTake(item);
+      if (result === "claimed") {
+        setPlaying(true);
+      } else {
+        setBusy(false);
+      }
+    } catch {
+      setBusy(false);
+    }
+  };
+
+  const handleRelease = async () => {
+    if (busy || exiting) return;
+    setBusy(true);
+    haptic(12);
+    try {
+      await onRelease(item);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <li className={`overflow-hidden rounded-lg px-2 py-2 sm:px-3 ${liClass}`}>
+    <li
+      className={`package-row overflow-hidden rounded-lg px-2 py-2 sm:px-3 ${liClass} ${
+        exiting ? "package-row-exit" : ""
+      }`}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <p
@@ -109,15 +161,20 @@ export default function PackageRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {item.status === "available" && (
-            <button
-              type="button"
-              className="btn-primary min-h-10 flex-1 px-3 py-2 text-sm sm:flex-none sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs"
-              onClick={() => onTake(item)}
-            >
-              אני לוקח
-            </button>
-          )}
+          <div
+            className={`expand min-w-0 ${
+              !claimed ? "expand-open flex-1 sm:flex-none" : ""
+            }`}
+          >
+            <div className="expand-inner" inert={claimed}>
+              <TakeButton
+                playing={playing}
+                busy={busy}
+                disabled={busy || exiting || claimed}
+                onClick={handleTake}
+              />
+            </div>
+          </div>
           <button
             type="button"
             className="btn-ghost px-2 py-1 text-xs"
@@ -129,162 +186,162 @@ export default function PackageRow({
         </div>
       </div>
 
-      {/* Collector line + undo (visible even when collapsed) */}
-      {item.status === "claimed" && (
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {(item.courierName || item.courierPhone) && (
-            <p className="inline-flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-800">
-              🚶 נלקח ע״י {item.courierName || "אוסף החבילה"}
+      <div className={`expand ${claimed ? "expand-open" : ""}`}>
+        <div className="expand-inner" inert={!claimed}>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            {(item.courierName || item.courierPhone) && (
+              <p className="inline-flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-800">
+                🚶 נלקח ע״י {item.courierName || "אוסף החבילה"}
+                {item.courierPhone && (
+                  <>
+                    {" · "}
+                    <a
+                      className="font-medium hover:underline"
+                      href={`tel:${item.courierPhone}`}
+                    >
+                      {item.courierPhone}
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
+              onClick={handleRelease}
+              disabled={busy || exiting || !claimed}
+            >
+              {busy && claimed ? "משחרר…" : "התחרטתי"}
+            </button>
+          </div>
+
+          {(item.ownerPhone || item.courierPhone) && (
+            <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
+              {item.ownerPhone && (
+                <a
+                  href={whatsappLink(
+                    item.ownerPhone,
+                    takenMessage(item, item.courierName || "שכן/ה")
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 sm:min-h-0 sm:py-1"
+                >
+                  <WhatsappIcon /> הודעה לבעל החבילה
+                </a>
+              )}
               {item.courierPhone && (
+                <a
+                  href={whatsappLink(item.courierPhone, messageToCollector(item))}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 sm:min-h-0 sm:py-1"
+                >
+                  <WhatsappIcon /> הודעה לאוסף החבילה
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={`expand ${open ? "expand-open" : ""}`}>
+        <div className="expand-inner" inert={!open}>
+          <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-sm">
+            {item.description && (
+              <p className="whitespace-pre-wrap break-words font-medium text-slate-800">
+                📦 {item.description}
+              </p>
+            )}
+            <p className="text-slate-600">
+              עבור{" "}
+              <span className="font-medium text-slate-800">
+                {item.ownerName || "—"}
+              </span>
+              {item.ownerPhone && (
                 <>
                   {" · "}
                   <a
-                    className="font-medium hover:underline"
-                    href={`tel:${item.courierPhone}`}
+                    className="text-brand-600 hover:underline"
+                    href={`tel:${item.ownerPhone}`}
                   >
-                    {item.courierPhone}
+                    {item.ownerPhone}
                   </a>
                 </>
               )}
             </p>
-          )}
-          <button
-            type="button"
-            className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
-            onClick={() => onRelease(item)}
-          >
-            התחרטתי
-          </button>
-        </div>
-      )}
 
-      {/* WhatsApp buttons (tap to send from your own WhatsApp) */}
-      {item.status === "claimed" && (item.ownerPhone || item.courierPhone) && (
-        <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
-          {item.ownerPhone && (
-            <a
-              href={whatsappLink(
-                item.ownerPhone,
-                takenMessage(item, item.courierName || "שכן/ה")
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 sm:min-h-0 sm:py-1"
-            >
-              <WhatsappIcon /> הודעה לבעל החבילה
-            </a>
-          )}
-          {item.courierPhone && (
-            <a
-              href={whatsappLink(item.courierPhone, messageToCollector(item))}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 sm:min-h-0 sm:py-1"
-            >
-              <WhatsappIcon /> הודעה לאוסף החבילה
-            </a>
-          )}
-        </div>
-      )}
+            {item.notes && <p className="text-slate-500">📝 {item.notes}</p>}
 
-      {/* Expanded details */}
-      {open && (
-        <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-sm">
-          {item.description && (
-            <p className="whitespace-pre-wrap break-words font-medium text-slate-800">
-              📦 {item.description}
-            </p>
-          )}
-          <p className="text-slate-600">
-            עבור{" "}
-            <span className="font-medium text-slate-800">
-              {item.ownerName || "—"}
-            </span>
-            {item.ownerPhone && (
-              <>
-                {" · "}
-                <a
-                  className="text-brand-600 hover:underline"
-                  href={`tel:${item.ownerPhone}`}
-                >
-                  {item.ownerPhone}
-                </a>
-              </>
-            )}
-          </p>
-
-          {item.notes && <p className="text-slate-500">📝 {item.notes}</p>}
-
-          {/* Collector drop-off note */}
-          {item.status === "claimed" && (
-            <div>
-              {editingNote ? (
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    className="input min-h-[60px] resize-y"
-                    placeholder="לדוגמה: אגיע בערב, אניח ברכב / אשים בבית שלי"
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="btn-primary px-3 py-1 text-xs"
-                      onClick={saveNote}
-                    >
-                      שמירת הערה
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-ghost px-3 py-1 text-xs"
-                      onClick={() => {
-                        setNoteDraft(item.courierNote);
-                        setEditingNote(false);
-                      }}
-                    >
-                      ביטול
-                    </button>
+            {claimed && (
+              <div>
+                {editingNote ? (
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      className="input min-h-[60px] resize-y"
+                      placeholder="לדוגמה: אגיע בערב, אניח ברכב / אשים בבית שלי"
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary px-3 py-1 text-xs"
+                        onClick={saveNote}
+                      >
+                        שמירת הערה
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost px-3 py-1 text-xs"
+                        onClick={() => {
+                          setNoteDraft(item.courierNote);
+                          setEditingNote(false);
+                        }}
+                      >
+                        ביטול
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : item.courierNote ? (
-                <p className="flex items-center gap-2 text-slate-700">
-                  🗒️ {item.courierNote}
+                ) : item.courierNote ? (
+                  <p className="flex items-center gap-2 text-slate-700">
+                    🗒️ {item.courierNote}
+                    <button
+                      type="button"
+                      className="btn-ghost px-2 py-0.5 text-xs"
+                      onClick={() => setEditingNote(true)}
+                    >
+                      עריכה
+                    </button>
+                  </p>
+                ) : (
                   <button
                     type="button"
-                    className="btn-ghost px-2 py-0.5 text-xs"
+                    className="btn-secondary px-3 py-1 text-xs"
                     onClick={() => setEditingNote(true)}
                   >
-                    עריכה
+                    ➕ הוספת הערת איסוף (מתי/איפה אניח)
                   </button>
-                </p>
-              ) : (
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {canManage && (
                 <button
                   type="button"
-                  className="btn-secondary px-3 py-1 text-xs"
-                  onClick={() => setEditingNote(true)}
+                  className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
+                  onClick={() => {
+                    if (confirm("למחוק את החבילה?")) deletePackage(item.id);
+                  }}
                 >
-                  ➕ הוספת הערת איסוף (מתי/איפה אניח)
+                  מחיקה
                 </button>
               )}
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {canManage && (
-              <button
-                type="button"
-                className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
-                onClick={() => {
-                  if (confirm("למחוק את החבילה?")) deletePackage(item.id);
-                }}
-              >
-                מחיקה
-              </button>
-            )}
           </div>
         </div>
-      )}
+      </div>
     </li>
   );
 }
