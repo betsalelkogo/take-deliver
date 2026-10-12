@@ -31,8 +31,8 @@ export default function IdentityForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-sm text-slate-600">
-        נשמור את הפרטים שלכם במכשיר הזה בלבד, כדי שבלחיצה על &quot;אני
-        לוקח&quot; נדע מי אספ/ה — בלי למלא כל פעם מחדש.
+        נשמור את הפרטים שלכם במכשיר הזה בלבד, כדי שבפעולות בלוח נדע מי אתם —
+        בלי למלא כל פעם מחדש.
       </p>
       <div>
         <label className="label">

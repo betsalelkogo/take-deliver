@@ -17,6 +17,7 @@ import { toIntlPhone } from "./whatsapp";
 const STATS_COLLECTION = "stats";
 const STATS_DOC = "global";
 const COLLECTORS_COLLECTION = "collectors";
+const PUBLISHERS_COLLECTION = "publishers";
 
 export interface CollectorScore {
   id: string;
@@ -127,12 +128,13 @@ export async function bumpCollectorScore(
   });
 }
 
-export function subscribeCollectors(
+function subscribeScores(
+  collectionName: string,
   onData: (list: CollectorScore[]) => void
 ): () => void {
   const db = getDb();
   return onSnapshot(
-    collection(db, COLLECTORS_COLLECTION),
+    collection(db, collectionName),
     (snap) =>
       onData(
         snap.docs.map((d) => ({
@@ -143,6 +145,44 @@ export function subscribeCollectors(
       ),
     () => {}
   );
+}
+
+export function subscribeCollectors(
+  onData: (list: CollectorScore[]) => void
+): () => void {
+  return subscribeScores(COLLECTORS_COLLECTION, onData);
+}
+
+export function subscribePublishers(
+  onData: (list: CollectorScore[]) => void
+): () => void {
+  return subscribeScores(PUBLISHERS_COLLECTION, onData);
+}
+
+// Per-publisher running total of packages posted, keyed like collectors
+// (phone, else name) so the same neighbour maps to the same score doc.
+export async function bumpPublisherScore(
+  name: string,
+  phone: string,
+  by = 1
+): Promise<void> {
+  const id = collectorId(name, phone);
+  if (!id) return;
+  const db = getDb();
+  const ref = doc(db, PUBLISHERS_COLLECTION, id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const current = (snap.data()?.count as number) ?? 0;
+    const next = Math.max(0, current + by);
+    tx.set(
+      ref,
+      {
+        name: name.trim() || (snap.data()?.name as string) || "",
+        count: next,
+      },
+      { merge: true }
+    );
+  });
 }
 
 // Rank by the higher of (all-time stored score, packages currently claimed

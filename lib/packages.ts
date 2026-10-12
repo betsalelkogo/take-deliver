@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { ADHOC_AREA } from "./locations";
-import { readCollectState, writeCollectDelta } from "./stats";
+import { bumpPublisherScore, readCollectState, writeCollectDelta } from "./stats";
 
 export type PackageStatus = "available" | "claimed";
 
@@ -37,6 +37,8 @@ export interface PackageItem {
 
 // Taken packages are auto-removed this long after being claimed.
 export const CLAIMED_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+// Untaken packages leave the board after this long.
+export const AVAILABLE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 1 month
 
 export interface NewPackageInput {
   area: string;
@@ -103,6 +105,8 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
   const db = getDb();
   const store = normalizeName(input.store);
   const area = normalizeName(input.area);
+  const ownerName = input.ownerName.trim();
+  const ownerPhone = input.ownerPhone.trim();
   await addDoc(collection(db, COLLECTION), {
     area,
     store,
@@ -110,8 +114,8 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     pickupLocation: store ? `${area} · ${store}` : area,
     description: input.description.trim(),
     packageNumber: input.packageNumber.trim(),
-    ownerName: input.ownerName.trim(),
-    ownerPhone: input.ownerPhone.trim(),
+    ownerName,
+    ownerPhone,
     notes: input.notes.trim(),
     urgent: input.urgent ?? false,
     status: "available" as PackageStatus,
@@ -122,6 +126,11 @@ export async function createPackage(input: NewPackageInput): Promise<void> {
     expireAt: null,
     createdAt: serverTimestamp(),
   });
+  try {
+    await bumpPublisherScore(ownerName, ownerPhone, 1);
+  } catch {
+    // Live ranking still counts packages on the board.
+  }
 }
 
 export async function claimPackage(
@@ -200,15 +209,19 @@ export async function deletePackage(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, id));
 }
 
-// Client-side cleanup: remove packages that were taken more than CLAIMED_TTL_MS
-// ago. Runs whenever the board loads/refreshes, so no backend cron is needed.
-// Falls back to createdAt for legacy claimed docs without a claimedAt stamp.
+// Client-side cleanup: claimed packages leave after CLAIMED_TTL_MS, and
+// still-available packages leave after AVAILABLE_TTL_MS. Runs whenever the
+// board loads/refreshes, so no backend cron is needed. Falls back to
+// createdAt for legacy claimed docs without a claimedAt stamp.
 export async function purgeExpiredClaimed(items: PackageItem[]): Promise<void> {
-  const cutoff = Date.now() - CLAIMED_TTL_MS;
-  const expired = items.filter(
-    (it) =>
-      it.status === "claimed" &&
-      (it.claimedAt ?? it.createdAt ?? Infinity) < cutoff
-  );
+  const now = Date.now();
+  const claimedCutoff = now - CLAIMED_TTL_MS;
+  const availableCutoff = now - AVAILABLE_TTL_MS;
+  const expired = items.filter((it) => {
+    if (it.status === "claimed") {
+      return (it.claimedAt ?? it.createdAt ?? Infinity) < claimedCutoff;
+    }
+    return (it.createdAt ?? Infinity) < availableCutoff;
+  });
   await Promise.all(expired.map((it) => deletePackage(it.id)));
 }

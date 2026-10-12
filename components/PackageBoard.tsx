@@ -19,6 +19,7 @@ import {
   collectorId,
   rankCollectors,
   subscribeCollectors,
+  subscribePublishers,
   subscribeToCollectedCount,
   type CollectorScore,
 } from "@/lib/stats";
@@ -107,26 +108,44 @@ function injectExiting(
   return next;
 }
 
+type PodiumTheme = "collect" | "publish";
+
 function PodiumPlace({
   place,
-  collector,
+  person,
+  theme,
 }: {
   place: 1 | 2 | 3;
-  collector: CollectorScore;
+  person: CollectorScore;
+  theme: PodiumTheme;
 }) {
   const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
-  const card =
+  const collectCard =
     place === 1
       ? "border-amber-300 from-amber-50 to-amber-200 pb-3 pt-2 sm:pb-4 sm:pt-3"
       : place === 2
         ? "border-slate-300 from-slate-50 to-slate-200 pb-2 pt-1.5 sm:pb-3 sm:pt-2"
         : "border-orange-300 from-orange-50 to-orange-200 pb-1.5 pt-1.5 sm:pb-2 sm:pt-2";
-  const step =
+  const publishCard =
+    place === 1
+      ? "border-sky-300 from-sky-50 to-sky-200 pb-3 pt-2 sm:pb-4 sm:pt-3"
+      : place === 2
+        ? "border-slate-300 from-slate-50 to-slate-200 pb-2 pt-1.5 sm:pb-3 sm:pt-2"
+        : "border-indigo-300 from-indigo-50 to-indigo-200 pb-1.5 pt-1.5 sm:pb-2 sm:pt-2";
+  const collectStep =
     place === 1
       ? "h-7 bg-amber-400 sm:h-10"
       : place === 2
         ? "h-5 bg-slate-400 sm:h-7"
         : "h-4 bg-orange-400 sm:h-5";
+  const publishStep =
+    place === 1
+      ? "h-7 bg-sky-400 sm:h-10"
+      : place === 2
+        ? "h-5 bg-slate-400 sm:h-7"
+        : "h-4 bg-indigo-400 sm:h-5";
+  const card = theme === "collect" ? collectCard : publishCard;
+  const step = theme === "collect" ? collectStep : publishStep;
 
   return (
     <div className="flex min-w-0 flex-1 basis-0 flex-col items-center">
@@ -139,15 +158,44 @@ function PodiumPlace({
         <span
           dir="rtl"
           className="max-w-full truncate text-center text-xs font-bold text-slate-800 sm:text-sm"
-          title={collector.name}
+          title={person.name}
         >
-          {collector.name || "אלמוני"}
+          {person.name || "אלמוני"}
         </span>
         <span dir="rtl" className="text-[11px] font-semibold text-slate-600 sm:text-xs">
-          {collector.count.toLocaleString("he-IL")} חבילות
+          {person.count.toLocaleString("he-IL")} חבילות
         </span>
       </div>
       <div className={`w-full rounded-b-md ${step}`} />
+    </div>
+  );
+}
+
+function ChampionsPodium({
+  title,
+  people,
+  theme,
+  frameClass,
+  titleClass,
+}: {
+  title: string;
+  people: CollectorScore[];
+  theme: PodiumTheme;
+  frameClass: string;
+  titleClass: string;
+}) {
+  if (people.length === 0) return null;
+  return (
+    <div className={`rounded-2xl border px-2 py-3 sm:px-4 sm:py-4 ${frameClass}`}>
+      <p className={`mb-3 text-center text-sm font-bold ${titleClass}`}>{title}</p>
+      <div
+        className="mx-auto flex w-full max-w-md items-end justify-center gap-1 sm:gap-3"
+        dir="ltr"
+      >
+        {people[1] && <PodiumPlace place={2} person={people[1]} theme={theme} />}
+        {people[0] && <PodiumPlace place={1} person={people[0]} theme={theme} />}
+        {people[2] && <PodiumPlace place={3} person={people[2]} theme={theme} />}
+      </div>
     </div>
   );
 }
@@ -181,6 +229,7 @@ export default function PackageBoard() {
   const [pendingTake, setPendingTake] = useState<PackageItem | null>(null);
   const [collectedCount, setCollectedCount] = useState(0);
   const [topCollectors, setTopCollectors] = useState<CollectorScore[]>([]);
+  const [topPublishers, setTopPublishers] = useState<CollectorScore[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [exiting, setExiting] = useState<ExitingRow[]>([]);
   const [celebratingId, setCelebratingId] = useState<string | null>(null);
@@ -268,11 +317,13 @@ export default function PackageBoard() {
       setCollectedCount(count)
     );
     const unsubTop = subscribeCollectors((list) => setTopCollectors(list));
+    const unsubPublishers = subscribePublishers((list) => setTopPublishers(list));
     return () => {
       unsubPkgs();
       unsubStores();
       unsubStats();
       unsubTop();
+      unsubPublishers();
     };
   }, [configured]);
 
@@ -380,6 +431,21 @@ export default function PackageBoard() {
     return rankCollectors(topCollectors, Array.from(liveById.values()), 3);
   }, [items, topCollectors]);
 
+  const publisherChampions = useMemo(() => {
+    const liveById = new Map<string, CollectorScore>();
+    for (const it of items) {
+      const id = collectorId(it.ownerName || "", it.ownerPhone || "");
+      if (!id) continue;
+      const prev = liveById.get(id);
+      liveById.set(id, {
+        id,
+        name: (it.ownerName || prev?.name || "").trim(),
+        count: (prev?.count ?? 0) + 1,
+      });
+    }
+    return rankCollectors(topPublishers, Array.from(liveById.values()), 3);
+  }, [items, topPublishers]);
+
   const counts = useMemo(() => {
     const base = items.filter(
       (it) => (!areaFilter || it.area === areaFilter) && matchesText(it)
@@ -468,25 +534,28 @@ export default function PackageBoard() {
          עד היום נאספו <AnimatedCount value={Math.max(0, collectedCount)} /> חבילות! 🎉
       </div>
 
-      {champions.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-2 py-3 sm:px-4 sm:py-4">
-          <p className="mb-3 text-center text-sm font-bold text-amber-900">
-            🏆 אלופי האיסוף
-          </p>
-          <div
-            className="mx-auto flex w-full max-w-md items-end justify-center gap-1 sm:gap-3"
-            dir="ltr"
-          >
-            {champions[1] && (
-              <PodiumPlace place={2} collector={champions[1]} />
-            )}
-            {champions[0] && (
-              <PodiumPlace place={1} collector={champions[0]} />
-            )}
-            {champions[2] && (
-              <PodiumPlace place={3} collector={champions[2]} />
-            )}
-          </div>
+      {(champions.length > 0 || publisherChampions.length > 0) && (
+        <div
+          className={`grid gap-3 ${
+            champions.length > 0 && publisherChampions.length > 0
+              ? "sm:grid-cols-2"
+              : ""
+          }`}
+        >
+          <ChampionsPodium
+            title="🏆 אלופי האיסוף"
+            people={champions}
+            theme="collect"
+            frameClass="border-amber-200 bg-amber-50"
+            titleClass="text-amber-900"
+          />
+          <ChampionsPodium
+            title="📦 אלופי החבילות"
+            people={publisherChampions}
+            theme="publish"
+            frameClass="border-sky-200 bg-sky-50"
+            titleClass="text-sky-900"
+          />
         </div>
       )}
 

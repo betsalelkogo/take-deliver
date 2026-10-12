@@ -65,6 +65,40 @@ service cloud.firestore {
       allow write: if request.resource.data.count is number;
     }
 
+    match /publishers/{publisherId} {
+      // Per-publisher leaderboard scores (packages posted).
+      allow read: if true;
+      allow write: if request.resource.data.count is number;
+    }
+
+    match /transfers/{transferId} {
+
+      function validTransfer(data) {
+        return data.destination is string
+          && data.destination.size() > 0
+          && data.destination.size() <= 100
+          && data.ownerName is string
+          && data.ownerName.size() > 0
+          && data.ownerName.size() <= 100
+          && data.ownerPhone is string
+          && data.ownerPhone.size() > 0
+          && data.kind in ['request', 'trip']
+          && data.status in ['open', 'matched', 'closed']
+          && (
+            data.status != 'matched'
+            || (
+              data.riderPhone is string && data.riderPhone.size() > 0
+              && data.riderName is string && data.riderName.size() > 0
+            )
+          );
+      }
+
+      allow read: if true;
+      allow create: if validTransfer(request.resource.data);
+      allow update: if validTransfer(request.resource.data);
+      allow delete: if true;
+    }
+
     match /stores/{storeId} {
 
       function validStore(data) {

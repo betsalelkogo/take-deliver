@@ -1,4 +1,5 @@
 import type { PackageItem } from "./packages";
+import type { TransferItem } from "./transfers";
 
 // Convert a locally-formatted (Israeli) phone number to an international
 // digits-only form suitable for wa.me links. Defaults to +972.
@@ -40,4 +41,41 @@ export function messageToCollector(item: PackageItem): string {
   const hi = item.courierName ? `היי ${item.courierName}, ` : "היי, ";
   const who = item.ownerName ? `כאן ${item.ownerName}. ` : "";
   return `${hi}${who}תודה שאספת לי את החבילה${what}. אפשר לתאם מסירה?`;
+}
+
+function transferWhen(item: TransferItem): string {
+  return item.whenText ? ` (${item.whenText})` : "";
+}
+
+function transferWhat(item: TransferItem): string {
+  return item.description ? ` (${item.description})` : "";
+}
+
+export function rideOfferMessage(
+  item: TransferItem,
+  riderName: string
+): string {
+  const hello = item.ownerName ? `היי ${item.ownerName}, ` : "היי, ";
+  const dest = item.destination ? ` ל${item.destination}` : "";
+  return (
+    `${hello}אני ${riderName} ונוסע${dest}${transferWhen(item)}.` +
+    ` אני יכול לקחת את מה שפרסמת${transferWhat(item)}.`
+  );
+}
+
+export function rideThanksMessage(item: TransferItem): string {
+  const hi = item.riderName ? `היי ${item.riderName}, ` : "היי, ";
+  const who = item.ownerName ? `כאן ${item.ownerName}. ` : "";
+  const dest = item.destination ? ` ל${item.destination}` : "";
+  return `${hi}${who}תודה שאתה לוקח את ההעברה${dest}${transferWhat(item)}. נתאם מסירה?`;
+}
+
+export function joinTripMessage(item: TransferItem, senderName: string): string {
+  const hello = item.ownerName ? `היי ${item.ownerName}, ` : "היי, ";
+  const dest = item.destination ? ` ל${item.destination}` : "";
+  const who = senderName ? ` כאן ${senderName}.` : "";
+  return (
+    `${hello}יש לי משהו להעביר${dest}${transferWhen(item)}.` +
+    `${who} אפשר להצטרף לנסיעה שלך?`
+  );
 }
