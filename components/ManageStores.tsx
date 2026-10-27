@@ -2,28 +2,40 @@
 
 import { useMemo, useState } from "react";
 import {
-  FIXED_AREAS,
   createStore,
   deleteStore,
+  isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
+import { useCommunity } from "./CommunityContext";
 
-export default function ManageStores({ stores }: { stores: StoreItem[] }) {
+const NEW_AREA_KEY = "__new_area__";
+
+export default function ManageStores({
+  stores,
+  areas,
+}: {
+  stores: StoreItem[];
+  areas: string[];
+}) {
+  const { id: communityId } = useCommunity();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [newArea, setNewArea] = useState("");
+  const [newAreaStore, setNewAreaStore] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const byArea = useMemo(() => {
     const map: Record<string, StoreItem[]> = {};
-    for (const a of FIXED_AREAS) map[a] = [];
+    for (const a of areas) map[a] = [];
     for (const s of stores) {
       if (map[s.area]) map[s.area].push(s);
     }
-    for (const a of FIXED_AREAS) {
+    for (const a of areas) {
       map[a].sort((x, y) => x.name.localeCompare(y.name, "he"));
     }
     return map;
-  }, [stores]);
+  }, [stores, areas]);
 
   const add = async (area: string) => {
     const name = (drafts[area] ?? "").trim();
@@ -38,8 +50,32 @@ export default function ManageStores({ stores }: { stores: StoreItem[] }) {
     setError(null);
     setBusy(area);
     try {
-      await createStore(area, name);
+      await createStore(communityId, area, name);
       setDrafts((d) => ({ ...d, [area]: "" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "משהו השתבש.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addArea = async () => {
+    const area = newArea.trim().replace(/\s+/g, " ");
+    const name = newAreaStore.trim();
+    if (!area || !name) {
+      setError("הזינו שם אזור ושם של חנות ראשונה בו.");
+      return;
+    }
+    if (areas.includes(area) || isAdhocArea(area)) {
+      setError(`האזור "${area}" כבר קיים. הוסיפו אליו חנות ברשימה.`);
+      return;
+    }
+    setError(null);
+    setBusy(NEW_AREA_KEY);
+    try {
+      await createStore(communityId, area, name);
+      setNewArea("");
+      setNewAreaStore("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש.");
     } finally {
@@ -51,7 +87,7 @@ export default function ManageStores({ stores }: { stores: StoreItem[] }) {
     <div className="space-y-4">
       <p className="text-sm text-slate-600">
         הוסיפו חנויות קבועות לכל אזור. הן יופיעו תמיד כשמפרסמים חבילה וגם בלוח,
-        כדי שכולם ישתמשו באותם שמות.
+        כדי שכולם ישתמשו באותם שמות. אזור חדש נשמר כשיש בו לפחות חנות אחת.
       </p>
 
       {error && (
@@ -61,7 +97,7 @@ export default function ManageStores({ stores }: { stores: StoreItem[] }) {
       )}
 
       <div className="max-h-[55vh] space-y-4 overflow-y-auto pe-1">
-        {FIXED_AREAS.map((area) => (
+        {areas.map((area) => (
           <div
             key={area}
             className="rounded-xl border border-slate-200 bg-slate-50 p-3"
@@ -81,7 +117,7 @@ export default function ManageStores({ stores }: { stores: StoreItem[] }) {
                     type="button"
                     className="text-slate-400 hover:text-red-600"
                     aria-label={`מחיקת ${s.name}`}
-                    onClick={() => deleteStore(s.id)}
+                    onClick={() => deleteStore(communityId, s.id)}
                   >
                     ×
                   </button>
@@ -114,6 +150,38 @@ export default function ManageStores({ stores }: { stores: StoreItem[] }) {
             </div>
           </div>
         ))}
+
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-3">
+          <div className="mb-2 font-semibold">+ אזור חדש</div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="input"
+              placeholder="שם האזור (עיר, קניון…)"
+              value={newArea}
+              onChange={(e) => setNewArea(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="חנות ראשונה באזור"
+              value={newAreaStore}
+              onChange={(e) => setNewAreaStore(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addArea();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn-secondary shrink-0"
+              disabled={busy === NEW_AREA_KEY}
+              onClick={addArea}
+            >
+              הוספה
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,17 +1,4 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  updateDoc,
-  Timestamp,
-} from "firebase/firestore";
-import { getDb } from "./firebase";
+import { api, poll, requestRefresh } from "./api";
 
 export type TransferKind = "request" | "trip";
 export type TransferStatus = "open" | "matched" | "closed";
@@ -46,144 +33,71 @@ export interface NewTransferInput {
   ownerPhone: string;
 }
 
-const COLLECTION = "transfers";
-
+// Open posts leave after OPEN_TTL_MS; matched/closed ones after DONE_TTL_MS.
 export const OPEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const DONE_TTL_MS = 2 * 24 * 60 * 60 * 1000;
 
-function normalize(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
+function transfersPath(communityId: string, id?: string): string {
+  const base = `/api/communities/${encodeURIComponent(communityId)}/transfers`;
+  return id ? `${base}/${encodeURIComponent(id)}` : base;
 }
 
 export function subscribeToTransfers(
+  communityId: string,
   onData: (items: TransferItem[]) => void,
   onError: (error: Error) => void
 ): () => void {
-  const db = getDb();
-  const q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"));
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const items: TransferItem[] = snapshot.docs.map((d) => {
-        const data = d.data();
-        const created = data.createdAt as Timestamp | null | undefined;
-        const matched = data.matchedAt as Timestamp | null | undefined;
-        const rawKind = data.kind === "trip" ? "trip" : "request";
-        const rawStatus = data.status as string | undefined;
-        const status: TransferStatus =
-          rawStatus === "matched" || rawStatus === "closed"
-            ? rawStatus
-            : "open";
-        return {
-          id: d.id,
-          kind: rawKind,
-          destination: data.destination ?? "",
-          description: data.description ?? "",
-          whenText: data.whenText ?? "",
-          forWhom: data.forWhom ?? "",
-          notes: data.notes ?? "",
-          urgent: data.urgent ?? false,
-          status,
-          ownerName: data.ownerName ?? "",
-          ownerPhone: data.ownerPhone ?? "",
-          riderName: data.riderName ?? null,
-          riderPhone: data.riderPhone ?? null,
-          createdAt: created ? created.toMillis() : null,
-          matchedAt: matched ? matched.toMillis() : null,
-        };
-      });
-      onData(items);
-    },
-    (err) => onError(err as Error)
+  return poll(
+    () => api<TransferItem[]>(transfersPath(communityId)),
+    onData,
+    onError
   );
 }
 
-export async function createTransfer(input: NewTransferInput): Promise<void> {
-  const db = getDb();
-  await addDoc(collection(db, COLLECTION), {
-    kind: input.kind,
-    destination: normalize(input.destination),
-    description: input.description.trim(),
-    whenText: input.whenText.trim(),
-    forWhom: input.forWhom.trim(),
-    notes: input.notes.trim(),
-    urgent: input.urgent ?? false,
-    status: "open" as TransferStatus,
-    ownerName: input.ownerName.trim(),
-    ownerPhone: input.ownerPhone.trim(),
-    riderName: null,
-    riderPhone: null,
-    matchedAt: null,
-    createdAt: serverTimestamp(),
-  });
+export async function createTransfer(
+  communityId: string,
+  input: NewTransferInput
+): Promise<void> {
+  await api(transfersPath(communityId), { method: "POST", body: input });
+  requestRefresh();
 }
 
+// Resolves false if the request was already taken.
 export async function matchTransfer(
+  communityId: string,
   id: string,
   riderName: string,
   riderPhone: string
 ): Promise<boolean> {
-  const db = getDb();
-  const ref = doc(db, COLLECTION, id);
-  const name = riderName.trim();
-  const phone = riderPhone.trim();
-
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.data();
-    if (!data) throw new Error("המודעה לא נמצאה");
-    if (data.status !== "open" || data.kind !== "request") return false;
-    tx.update(ref, {
-      status: "matched" as TransferStatus,
-      riderName: name,
-      riderPhone: phone,
-      matchedAt: serverTimestamp(),
-    });
-    return true;
+  const { ok } = await api<{ ok: boolean }>(transfersPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "match", riderName, riderPhone },
   });
+  requestRefresh();
+  return ok;
 }
 
-export async function unmatchTransfer(id: string): Promise<boolean> {
-  const db = getDb();
-  const ref = doc(db, COLLECTION, id);
-
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.data();
-    if (!data || data.status !== "matched") return false;
-    tx.update(ref, {
-      status: "open" as TransferStatus,
-      riderName: null,
-      riderPhone: null,
-      matchedAt: null,
-    });
-    return true;
+export async function unmatchTransfer(
+  communityId: string,
+  id: string
+): Promise<boolean> {
+  const { ok } = await api<{ ok: boolean }>(transfersPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "unmatch" },
   });
+  requestRefresh();
+  return ok;
 }
 
-export async function closeTransfer(id: string): Promise<void> {
-  const db = getDb();
-  await updateDoc(doc(db, COLLECTION, id), {
-    status: "closed" as TransferStatus,
-    matchedAt: serverTimestamp(),
+export async function closeTransfer(communityId: string, id: string): Promise<void> {
+  await api(transfersPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "close" },
   });
+  requestRefresh();
 }
 
-export async function deleteTransfer(id: string): Promise<void> {
-  const db = getDb();
-  await deleteDoc(doc(db, COLLECTION, id));
-}
-
-export async function purgeExpiredTransfers(
-  items: TransferItem[]
-): Promise<void> {
-  const now = Date.now();
-  const expired = items.filter((it) => {
-    const created = it.createdAt ?? Infinity;
-    if (it.status === "open") return created < now - OPEN_TTL_MS;
-    const doneAt = it.matchedAt ?? created;
-    return doneAt < now - DONE_TTL_MS;
-  });
-  await Promise.all(expired.map((it) => deleteTransfer(it.id)));
+export async function deleteTransfer(communityId: string, id: string): Promise<void> {
+  await api(transfersPath(communityId, id), { method: "DELETE" });
+  requestRefresh();
 }

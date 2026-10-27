@@ -1,19 +1,6 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  updateDoc,
-  Timestamp,
-} from "firebase/firestore";
-import { getDb } from "./firebase";
-import { ADHOC_AREA } from "./locations";
-import { bumpPublisherScore, readCollectState, writeCollectDelta } from "./stats";
+import { api, poll, requestRefresh } from "./api";
+import type { StoreItem } from "./locations";
+import type { CollectorScore, GlobalStats } from "./stats";
 
 export type PackageStatus = "available" | "claimed";
 
@@ -35,6 +22,15 @@ export interface PackageItem {
   claimedAt: number | null;
 }
 
+// Everything the pickup board shows, fetched in one request.
+export interface PackageBoardData {
+  packages: PackageItem[];
+  stores: StoreItem[];
+  stats: GlobalStats;
+  topCollectors: CollectorScore[];
+  topPublishers: CollectorScore[];
+}
+
 // Taken packages are auto-removed this long after being claimed.
 export const CLAIMED_TTL_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 // Untaken packages leave the board after this long.
@@ -51,177 +47,71 @@ export interface NewPackageInput {
   urgent: boolean;
 }
 
-const COLLECTION = "packages";
-
-function normalizeName(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
+function packagesPath(communityId: string, id?: string): string {
+  const base = `/api/communities/${encodeURIComponent(communityId)}/packages`;
+  return id ? `${base}/${encodeURIComponent(id)}` : base;
 }
 
-export function subscribeToPackages(
-  onData: (items: PackageItem[]) => void,
+export function subscribeToPackageBoard(
+  communityId: string,
+  onData: (data: PackageBoardData) => void,
   onError: (error: Error) => void
 ): () => void {
-  const db = getDb();
-  const q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"));
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const items: PackageItem[] = snapshot.docs.map((d) => {
-        const data = d.data();
-        const created = data.createdAt as Timestamp | null | undefined;
-        const claimed = data.claimedAt as Timestamp | null | undefined;
-        // Legacy docs only had `pickupLocation`; map them into the ad-hoc area.
-        const legacyLocation = data.pickupLocation ?? "";
-        // Legacy "delivered" docs are shown as "claimed" (2-state model).
-        const rawStatus = data.status ?? "available";
-        const status: PackageStatus =
-          rawStatus === "available" ? "available" : "claimed";
-        return {
-          id: d.id,
-          area: data.area ?? (legacyLocation ? ADHOC_AREA : ""),
-          store: data.store ?? legacyLocation,
-          description: data.description ?? "",
-          packageNumber: data.packageNumber ?? "",
-          ownerName: data.ownerName ?? "",
-          ownerPhone: data.ownerPhone ?? "",
-          notes: data.notes ?? "",
-          status,
-          courierName: data.courierName ?? null,
-          courierPhone: data.courierPhone ?? null,
-          courierNote: data.courierNote ?? "",
-          urgent: data.urgent ?? false,
-          createdAt: created ? created.toMillis() : null,
-          claimedAt: claimed ? claimed.toMillis() : null,
-        };
-      });
-      onData(items);
-    },
-    (err) => onError(err as Error)
+  return poll(
+    () => api<PackageBoardData>(packagesPath(communityId)),
+    onData,
+    onError
   );
 }
 
-export async function createPackage(input: NewPackageInput): Promise<void> {
-  const db = getDb();
-  const store = normalizeName(input.store);
-  const area = normalizeName(input.area);
-  const ownerName = input.ownerName.trim();
-  const ownerPhone = input.ownerPhone.trim();
-  await addDoc(collection(db, COLLECTION), {
-    area,
-    store,
-    // Kept for backward compatibility with any older readers.
-    pickupLocation: store ? `${area} · ${store}` : area,
-    description: input.description.trim(),
-    packageNumber: input.packageNumber.trim(),
-    ownerName,
-    ownerPhone,
-    notes: input.notes.trim(),
-    urgent: input.urgent ?? false,
-    status: "available" as PackageStatus,
-    courierName: null,
-    courierPhone: null,
-    courierNote: "",
-    claimedAt: null,
-    expireAt: null,
-    createdAt: serverTimestamp(),
-  });
-  try {
-    await bumpPublisherScore(ownerName, ownerPhone, 1);
-  } catch {
-    // Live ranking still counts packages on the board.
-  }
+export async function createPackage(
+  communityId: string,
+  input: NewPackageInput
+): Promise<void> {
+  await api(packagesPath(communityId), { method: "POST", body: input });
+  requestRefresh();
 }
 
+// Resolves false if someone else already took the package.
 export async function claimPackage(
+  communityId: string,
   id: string,
   courierName: string,
   courierPhone: string
 ): Promise<boolean> {
-  const db = getDb();
-  const pkgRef = doc(db, COLLECTION, id);
-  const name = courierName.trim();
-  const phone = courierPhone.trim();
-
-  return runTransaction(db, async (tx) => {
-    const pkgSnap = await tx.get(pkgRef);
-    const data = pkgSnap.data();
-    if (!data) throw new Error("החבילה לא נמצאה");
-    if (data.status === "claimed") return false;
-
-    const collect = await readCollectState(tx, name, phone);
-
-    tx.update(pkgRef, {
-      status: "claimed" as PackageStatus,
-      courierName: name,
-      courierPhone: phone,
-      claimedAt: serverTimestamp(),
-      expireAt: Timestamp.fromMillis(Date.now() + CLAIMED_TTL_MS),
-    });
-    writeCollectDelta(tx, collect, name, 1);
-    return true;
+  const { ok } = await api<{ ok: boolean }>(packagesPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "claim", courierName, courierPhone },
   });
+  requestRefresh();
+  return ok;
 }
 
-export async function claimManyPackages(
-  ids: string[],
-  courierName: string,
-  courierPhone: string
+export async function unclaimPackage(
+  communityId: string,
+  id: string
+): Promise<boolean> {
+  const { ok } = await api<{ ok: boolean }>(packagesPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "release" },
+  });
+  requestRefresh();
+  return ok;
+}
+
+export async function setCourierNote(
+  communityId: string,
+  id: string,
+  note: string
 ): Promise<void> {
-  await Promise.all(ids.map((id) => claimPackage(id, courierName, courierPhone)));
-}
-
-export async function setCourierNote(id: string, note: string): Promise<void> {
-  const db = getDb();
-  await updateDoc(doc(db, COLLECTION, id), {
-    courierNote: note.trim(),
+  await api(packagesPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "note", note },
   });
+  requestRefresh();
 }
 
-export async function unclaimPackage(id: string): Promise<boolean> {
-  const db = getDb();
-  const pkgRef = doc(db, COLLECTION, id);
-
-  return runTransaction(db, async (tx) => {
-    const pkgSnap = await tx.get(pkgRef);
-    const data = pkgSnap.data();
-    if (!data || data.status !== "claimed") return false;
-
-    const name = (data.courierName as string) || "";
-    const phone = (data.courierPhone as string) || "";
-    const collect = await readCollectState(tx, name, phone);
-
-    tx.update(pkgRef, {
-      status: "available" as PackageStatus,
-      courierName: null,
-      courierPhone: null,
-      courierNote: "",
-      claimedAt: null,
-      expireAt: null,
-    });
-    writeCollectDelta(tx, collect, name, -1);
-    return true;
-  });
-}
-
-export async function deletePackage(id: string): Promise<void> {
-  const db = getDb();
-  await deleteDoc(doc(db, COLLECTION, id));
-}
-
-// Client-side cleanup: claimed packages leave after CLAIMED_TTL_MS, and
-// still-available packages leave after AVAILABLE_TTL_MS. Runs whenever the
-// board loads/refreshes, so no backend cron is needed. Falls back to
-// createdAt for legacy claimed docs without a claimedAt stamp.
-export async function purgeExpiredClaimed(items: PackageItem[]): Promise<void> {
-  const now = Date.now();
-  const claimedCutoff = now - CLAIMED_TTL_MS;
-  const availableCutoff = now - AVAILABLE_TTL_MS;
-  const expired = items.filter((it) => {
-    if (it.status === "claimed") {
-      return (it.claimedAt ?? it.createdAt ?? Infinity) < claimedCutoff;
-    }
-    return (it.createdAt ?? Infinity) < availableCutoff;
-  });
-  await Promise.all(expired.map((it) => deletePackage(it.id)));
+export async function deletePackage(communityId: string, id: string): Promise<void> {
+  await api(packagesPath(communityId, id), { method: "DELETE" });
+  requestRefresh();
 }

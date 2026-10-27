@@ -1,23 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ALL_DESTINATIONS, isOtherDestination } from "@/lib/destinations";
+import { OTHER_DESTINATION, isOtherDestination } from "@/lib/destinations";
 import { createTransfer, type TransferKind } from "@/lib/transfers";
 import { isValidPhone } from "@/lib/whatsapp";
 import type { Identity } from "@/lib/identity";
+import { useCommunity } from "./CommunityContext";
 
 export default function TransferForm({
   kind,
+  destinations,
   identity,
   onIdentitySave,
   onDone,
 }: {
   kind: TransferKind;
+  destinations: string[];
   identity: Identity | null;
   onIdentitySave: (identity: Identity) => void;
   onDone: () => void;
 }) {
-  const [destination, setDestination] = useState("");
+  const { id: communityId } = useCommunity();
+  const [destination, setDestination] = useState(
+    destinations.length ? "" : OTHER_DESTINATION
+  );
   const [customDestination, setCustomDestination] = useState("");
   const [description, setDescription] = useState("");
   const [whenText, setWhenText] = useState("");
@@ -56,7 +62,7 @@ export default function TransferForm({
     }
     setSubmitting(true);
     try {
-      await createTransfer({
+      await createTransfer(communityId, {
         kind,
         destination: resolvedDestination,
         description,
@@ -85,7 +91,7 @@ export default function TransferForm({
           יעד <span className="text-red-500">*</span>
         </label>
         <div className="flex flex-wrap gap-2">
-          {ALL_DESTINATIONS.map((d) => (
+          {[...destinations, OTHER_DESTINATION].map((d) => (
             <button
               key={d}
               type="button"

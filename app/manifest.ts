@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
+import { APP_NAME } from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "כרם רעים",
-    short_name: "כרם רעים",
+    name: APP_NAME,
+    short_name: APP_NAME,
     description:
-      "איסוף חבילות מחנויות, והעברות מהיישוב ליעדים כמו חומש וירושלים.",
+      "לוח חבילות לכל יישוב, שכונה או בניין: איסוף מחנויות והעברות בין שכנים.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

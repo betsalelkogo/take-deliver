@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { isFirebaseConfigured } from "@/lib/firebase";
 import { useIdentity } from "@/lib/identity";
 import {
   matchTransfer,
-  purgeExpiredTransfers,
   subscribeToTransfers,
   type TransferItem,
   type TransferKind,
 } from "@/lib/transfers";
 import { toIntlPhone } from "@/lib/whatsapp";
+import { destinationsFor } from "@/lib/destinations";
+import { useCommunity } from "./CommunityContext";
 import Modal from "./Modal";
 import TransferForm from "./TransferForm";
 import TransferRow from "./TransferRow";
@@ -19,21 +19,6 @@ import Toast from "./Toast";
 import BoardSkeleton from "./BoardSkeleton";
 
 type View = "open" | "mine";
-
-function SetupNotice() {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-      <h2 className="text-base font-bold text-amber-900">
-        Firebase עדיין לא מוגדר
-      </h2>
-      <p className="mt-2 text-sm text-amber-800">
-        העתיקו את <code className="rounded bg-amber-100 px-1">.env.example</code>{" "}
-        אל <code className="rounded bg-amber-100 px-1">.env.local</code>, מלאו את
-        פרטי ה-Firebase של האפליקציה, והפעילו מחדש את שרת הפיתוח.
-      </p>
-    </div>
-  );
-}
 
 export default function TransferBoard() {
   const [items, setItems] = useState<TransferItem[]>([]);
@@ -48,7 +33,17 @@ export default function TransferBoard() {
   const [toast, setToast] = useState<string | null>(null);
 
   const { identity, setIdentity } = useIdentity();
-  const configured = isFirebaseConfigured;
+  const community = useCommunity();
+  const communityId = community.id;
+
+  const destinations = useMemo(
+    () =>
+      destinationsFor(
+        community.destinations,
+        items.map((it) => it.destination)
+      ),
+    [community.destinations, items]
+  );
 
   const showToast = (message: string) => {
     setToast(message);
@@ -68,24 +63,22 @@ export default function TransferBoard() {
     return byPhone || byName;
   };
 
-  useEffect(() => {
-    if (!configured) {
-      setLoading(false);
-      return;
-    }
-    const unsub = subscribeToTransfers(
-      (data) => {
-        setItems(data);
-        setLoading(false);
-        purgeExpiredTransfers(data).catch(() => {});
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      }
-    );
-    return () => unsub();
-  }, [configured]);
+  useEffect(
+    () =>
+      subscribeToTransfers(
+        communityId,
+        (data) => {
+          setItems(data);
+          setError(null);
+          setLoading(false);
+        },
+        (err) => {
+          setError(err.message);
+          setLoading(false);
+        }
+      ),
+    [communityId]
+  );
 
   const takeRide = async (item: TransferItem) => {
     if (!identity?.name) {
@@ -94,7 +87,12 @@ export default function TransferBoard() {
       return;
     }
     try {
-      const ok = await matchTransfer(item.id, identity.name, identity.phone);
+      const ok = await matchTransfer(
+        communityId,
+        item.id,
+        identity.name,
+        identity.phone
+      );
       showToast(
         ok
           ? "שובצת לנסיעה! שלחו הודעה למפרסם 👇"
@@ -112,7 +110,7 @@ export default function TransferBoard() {
       const item = pendingRide;
       setPendingRide(null);
       try {
-        const ok = await matchTransfer(item.id, id.name, id.phone);
+        const ok = await matchTransfer(communityId, item.id, id.name, id.phone);
         showToast(
           ok
             ? "שובצת לנסיעה! שלחו הודעה למפרסם 👇"
@@ -166,8 +164,8 @@ export default function TransferBoard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900 sm:px-4">
-        מחפשים להעביר משהו מהיישוב ליעד — חומש, ירושלים, נתב״ג? פרסמו בקשה.
-        נוסעים לשם? פרסמו נסיעה, או השתבצו לבקשה שכבר ממתינה.
+        צריכים להעביר משהו ליעד אחר, כמו עיר סמוכה, בית חולים או נתב״ג? פרסמו
+        בקשה. נוסעים לשם? פרסמו נסיעה, או השתבצו לבקשה שכבר ממתינה.
       </div>
 
       <div className="flex flex-col gap-3">
@@ -245,57 +243,51 @@ export default function TransferBoard() {
         </div>
       </div>
 
-      {!configured && <SetupNotice />}
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
 
-      {configured && (
-        <>
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          {loading ? (
-            <BoardSkeleton />
-          ) : groups.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-              <p className="text-sm text-slate-500">
-                {view === "open"
-                  ? "אין כרגע בקשות או נסיעות פתוחות."
-                  : "אין מודעות שקשורות אליך."}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {groups.map((group) => (
-                <section
-                  key={group.destination}
-                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
-                >
-                  <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-sky-50 px-3 py-3 sm:px-4">
-                    <span className="text-base font-bold text-sky-900">
-                      {group.destination}
-                    </span>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                      {group.items.length}
-                    </span>
-                  </div>
-                  <ul className="space-y-2 px-3 py-3 sm:px-4">
-                    {group.items.map((it) => (
-                      <TransferRow
-                        key={it.id}
-                        item={it}
-                        onRide={takeRide}
-                        canManage={isMine(it)}
-                        myName={identity?.name || ""}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
-        </>
+      {loading ? (
+        <BoardSkeleton />
+      ) : groups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="text-sm text-slate-500">
+            {view === "open"
+              ? "אין כרגע בקשות או נסיעות פתוחות."
+              : "אין מודעות שקשורות אליך."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <section
+              key={group.destination}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            >
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-sky-50 px-3 py-3 sm:px-4">
+                <span className="text-base font-bold text-sky-900">
+                  {group.destination}
+                </span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {group.items.length}
+                </span>
+              </div>
+              <ul className="space-y-2 px-3 py-3 sm:px-4">
+                {group.items.map((it) => (
+                  <TransferRow
+                    key={it.id}
+                    item={it}
+                    onRide={takeRide}
+                    canManage={isMine(it)}
+                    myName={identity?.name || ""}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
 
       <Modal
@@ -306,6 +298,7 @@ export default function TransferBoard() {
         <TransferForm
           key={composeKind}
           kind={composeKind}
+          destinations={destinations}
           identity={identity}
           onIdentitySave={setIdentity}
           onDone={() => {

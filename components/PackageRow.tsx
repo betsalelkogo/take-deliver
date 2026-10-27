@@ -9,6 +9,7 @@ import {
 } from "@/lib/packages";
 import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
 import { timeAgo } from "@/lib/time";
+import { useCommunity } from "./CommunityContext";
 
 export type TakeResult = "claimed" | "skipped" | "failed";
 
@@ -66,6 +67,7 @@ export default function PackageRow({
   exiting?: boolean;
   celebrateTake?: boolean;
 }) {
+  const { id: communityId } = useCommunity();
   const [open, setOpen] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteDraft, setNoteDraft] = useState(item.courierNote);
@@ -82,7 +84,7 @@ export default function PackageRow({
   const created = timeAgo(item.createdAt);
 
   const saveNote = async () => {
-    await setCourierNote(item.id, noteDraft);
+    await setCourierNote(communityId, item.id, noteDraft);
     setEditingNote(false);
   };
 
@@ -332,7 +334,7 @@ export default function PackageRow({
                   type="button"
                   className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
                   onClick={() => {
-                    if (confirm("למחוק את החבילה?")) deletePackage(item.id);
+                    if (confirm("למחוק את החבילה?")) deletePackage(communityId, item.id);
                   }}
                 >
                   מחיקה

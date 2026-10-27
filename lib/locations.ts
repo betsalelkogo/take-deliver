@@ -1,29 +1,7 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-} from "firebase/firestore";
-import { getDb } from "./firebase";
+import { api, requestRefresh } from "./api";
 
 // Bucket for one-off locations that don't belong to a known area.
 export const ADHOC_AREA = "מיקום מזדמן";
-
-// First-level areas (most pickups are recurring). Editable here.
-export const FIXED_AREAS: string[] = [
-  "קרית ספר",
-  "שילת",
-  "ישפרו",
-  "מודיעין",
-  "טלמונים",
-  "מכולת טלמון",
-];
-
-export const ALL_AREAS: string[] = [...FIXED_AREAS, ADHOC_AREA];
 
 export function isAdhocArea(area: string): boolean {
   return area === ADHOC_AREA;
@@ -35,39 +13,35 @@ export interface StoreItem {
   name: string;
 }
 
-const COLLECTION = "stores";
-
-export function subscribeToStores(
-  onData: (items: StoreItem[]) => void,
-  onError: (error: Error) => void
-): () => void {
-  const db = getDb();
-  const q = query(collection(db, COLLECTION), orderBy("name", "asc"));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      onData(
-        snapshot.docs.map((d) => ({
-          id: d.id,
-          area: d.data().area ?? "",
-          name: d.data().name ?? "",
-        }))
-      );
-    },
-    (err) => onError(err as Error)
-  );
+// A community's first-level areas: its fixed list, then every other area that
+// has at least one pinned store.
+export function areasFor(fixedAreas: string[], stores: StoreItem[]): string[] {
+  const extra = new Set<string>();
+  for (const s of stores) {
+    const area = s.area.trim();
+    if (area && !isAdhocArea(area) && !fixedAreas.includes(area)) extra.add(area);
+  }
+  return [
+    ...fixedAreas,
+    ...Array.from(extra).sort((a, b) => a.localeCompare(b, "he")),
+  ];
 }
 
-export async function createStore(area: string, name: string): Promise<void> {
-  const db = getDb();
-  await addDoc(collection(db, COLLECTION), {
-    area: area.trim(),
-    name: name.trim(),
-    createdAt: serverTimestamp(),
-  });
+function storesPath(communityId: string, id?: string): string {
+  const base = `/api/communities/${encodeURIComponent(communityId)}/stores`;
+  return id ? `${base}/${encodeURIComponent(id)}` : base;
 }
 
-export async function deleteStore(id: string): Promise<void> {
-  const db = getDb();
-  await deleteDoc(doc(db, COLLECTION, id));
+export async function createStore(
+  communityId: string,
+  area: string,
+  name: string
+): Promise<void> {
+  await api(storesPath(communityId), { method: "POST", body: { area, name } });
+  requestRefresh();
+}
+
+export async function deleteStore(communityId: string, id: string): Promise<void> {
+  await api(storesPath(communityId, id), { method: "DELETE" });
+  requestRefresh();
 }

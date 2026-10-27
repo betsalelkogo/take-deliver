@@ -40,8 +40,8 @@ export default function WelcomeBanner() {
         צריכים עזרה עם חבילה?
       </h2>
       <p className="mt-1 max-w-2xl text-sm text-brand-50">
-        איסוף מחנות, או העברה מהיישוב ליעד — חומש, ירושלים, נתב״ג. פרסמו את
-        הבקשה, ומי שבדרך לשם משתבץ. בלי עוד הודעות &quot;מישהו מגיע ל___?&quot;.
+        איסוף מחנות, או העברה ליעד אחר. פרסמו את הבקשה, ומי שבדרך לשם משתבץ.
+        בלי עוד הודעות &quot;מישהו מגיע ל___?&quot;.
       </p>
       <div className="mt-3 flex justify-end">
         <button

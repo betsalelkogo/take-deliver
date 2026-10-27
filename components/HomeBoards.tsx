@@ -52,7 +52,7 @@ export default function HomeBoards() {
               : "text-slate-600 hover:bg-slate-100"
           }`}
         >
-          העברות מהיישוב
+          העברות
         </button>
       </div>
       {board === "pickup" ? <PackageBoard /> : <TransferBoard />}

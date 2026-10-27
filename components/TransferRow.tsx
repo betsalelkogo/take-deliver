@@ -14,6 +14,7 @@ import {
   whatsappLink,
 } from "@/lib/whatsapp";
 import { timeAgo } from "@/lib/time";
+import { useCommunity } from "./CommunityContext";
 
 function WhatsappIcon() {
   return (
@@ -47,6 +48,7 @@ export default function TransferRow({
   canManage: boolean;
   myName: string;
 }) {
+  const { id: communityId } = useCommunity();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const created = timeAgo(item.createdAt);
@@ -164,7 +166,7 @@ export default function TransferRow({
             type="button"
             className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
             onClick={() => {
-              unmatchTransfer(item.id).catch(() => {});
+              unmatchTransfer(communityId, item.id).catch(() => {});
             }}
           >
             התחרטתי
@@ -226,7 +228,7 @@ export default function TransferRow({
               <button
                 type="button"
                 className="btn-secondary px-3 py-1 text-xs"
-                onClick={() => closeTransfer(item.id)}
+                onClick={() => closeTransfer(communityId, item.id)}
               >
                 הנסיעה יצאה
               </button>
@@ -236,7 +238,7 @@ export default function TransferRow({
                 type="button"
                 className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
                 onClick={() => {
-                  if (confirm("למחוק את המודעה?")) deleteTransfer(item.id);
+                  if (confirm("למחוק את המודעה?")) deleteTransfer(communityId, item.id);
                 }}
               >
                 מחיקה

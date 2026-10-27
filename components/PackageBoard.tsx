@@ -1,29 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isFirebaseConfigured } from "@/lib/firebase";
 import {
   claimPackage,
-  purgeExpiredClaimed,
-  subscribeToPackages,
+  subscribeToPackageBoard,
   unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
-import {
-  ALL_AREAS,
-  subscribeToStores,
-  type StoreItem,
-} from "@/lib/locations";
+import { ADHOC_AREA, areasFor, type StoreItem } from "@/lib/locations";
 import { useIdentity } from "@/lib/identity";
 import {
+  averageCloseMs,
   collectorId,
   rankCollectors,
-  subscribeCollectors,
-  subscribePublishers,
-  subscribeToCollectedCount,
   type CollectorScore,
+  type GlobalStats,
 } from "@/lib/stats";
 import { toIntlPhone } from "@/lib/whatsapp";
+import { formatDuration } from "@/lib/time";
+import { useCommunity } from "./CommunityContext";
 import Modal from "./Modal";
 import PackageForm from "./PackageForm";
 import ManageStores from "./ManageStores";
@@ -200,21 +195,6 @@ function ChampionsPodium({
   );
 }
 
-function SetupNotice() {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-      <h2 className="text-base font-bold text-amber-900">
-        Firebase עדיין לא מוגדר
-      </h2>
-      <p className="mt-2 text-sm text-amber-800">
-        העתיקו את <code className="rounded bg-amber-100 px-1">.env.example</code>{" "}
-        אל <code className="rounded bg-amber-100 px-1">.env.local</code>, מלאו את
-        פרטי ה-Firebase של האפליקציה, והפעילו מחדש את שרת הפיתוח.
-      </p>
-    </div>
-  );
-}
-
 export default function PackageBoard() {
   const [items, setItems] = useState<PackageItem[]>([]);
   const [stores, setStores] = useState<StoreItem[]>([]);
@@ -227,7 +207,11 @@ export default function PackageBoard() {
   const [showManage, setShowManage] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [pendingTake, setPendingTake] = useState<PackageItem | null>(null);
-  const [collectedCount, setCollectedCount] = useState(0);
+  const [stats, setStats] = useState<GlobalStats>({
+    collected: 0,
+    closeTotalMs: 0,
+    closeCount: 0,
+  });
   const [topCollectors, setTopCollectors] = useState<CollectorScore[]>([]);
   const [topPublishers, setTopPublishers] = useState<CollectorScore[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -236,7 +220,14 @@ export default function PackageBoard() {
   const mounted = useRef(true);
 
   const { identity, setIdentity } = useIdentity();
-  const configured = isFirebaseConfigured;
+  const community = useCommunity();
+  const communityId = community.id;
+
+  const areas = useMemo(
+    () => areasFor(community.areas, stores),
+    [community.areas, stores]
+  );
+  const allAreas = useMemo(() => [...areas, ADHOC_AREA], [areas]);
 
   useEffect(() => {
     mounted.current = true;
@@ -292,40 +283,26 @@ export default function PackageBoard() {
     return byPhone || byName;
   };
 
-  useEffect(() => {
-    if (!configured) {
-      setLoading(false);
-      return;
-    }
-    const unsubPkgs = subscribeToPackages(
-      (data) => {
-        setItems(data);
-        setLoading(false);
-        // Auto-remove packages taken more than 2 days ago.
-        purgeExpiredClaimed(data).catch(() => {});
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      }
-    );
-    const unsubStores = subscribeToStores(
-      (data) => setStores(data),
-      (err) => setError(err.message)
-    );
-    const unsubStats = subscribeToCollectedCount((count) =>
-      setCollectedCount(count)
-    );
-    const unsubTop = subscribeCollectors((list) => setTopCollectors(list));
-    const unsubPublishers = subscribePublishers((list) => setTopPublishers(list));
-    return () => {
-      unsubPkgs();
-      unsubStores();
-      unsubStats();
-      unsubTop();
-      unsubPublishers();
-    };
-  }, [configured]);
+  useEffect(
+    () =>
+      subscribeToPackageBoard(
+        communityId,
+        (data) => {
+          setItems(data.packages);
+          setStores(data.stores);
+          setStats(data.stats);
+          setTopCollectors(data.topCollectors);
+          setTopPublishers(data.topPublishers);
+          setError(null);
+          setLoading(false);
+        },
+        (err) => {
+          setError(err.message);
+          setLoading(false);
+        }
+      ),
+    [communityId]
+  );
 
   // Per-package take: claim it (the collector then taps the WhatsApp button
   // on the package to notify the owner from their own WhatsApp).
@@ -336,7 +313,12 @@ export default function PackageBoard() {
       return "skipped";
     }
     try {
-      const counted = await claimPackage(item.id, identity.name, identity.phone);
+      const counted = await claimPackage(
+        communityId,
+        item.id,
+        identity.name,
+        identity.phone
+      );
       if (counted) {
         celebrateClaim(item, {
           ...item,
@@ -364,7 +346,7 @@ export default function PackageBoard() {
   // the package again and rolls the total + collector score back by one.
   const releasePackage = async (item: PackageItem) => {
     try {
-      const reverted = await unclaimPackage(item.id);
+      const reverted = await unclaimPackage(communityId, item.id);
       if (reverted && view === "claimed") {
         markExit(item, "release");
       }
@@ -383,7 +365,7 @@ export default function PackageBoard() {
       const pkg = pendingTake;
       setPendingTake(null);
       try {
-        const counted = await claimPackage(pkg.id, id.name, id.phone);
+        const counted = await claimPackage(communityId, pkg.id, id.name, id.phone);
         if (counted) {
           celebrateClaim(pkg, {
             ...pkg,
@@ -446,6 +428,13 @@ export default function PackageBoard() {
     return rankCollectors(topPublishers, Array.from(liveById.values()), 3);
   }, [items, topPublishers]);
 
+  const avgCloseMs = useMemo(() => {
+    const live = items
+      .filter((it) => it.status === "claimed" && it.createdAt && it.claimedAt)
+      .map((it) => Math.max(0, (it.claimedAt ?? 0) - (it.createdAt ?? 0)));
+    return averageCloseMs(stats, live);
+  }, [items, stats]);
+
   const counts = useMemo(() => {
     const base = items.filter(
       (it) => (!areaFilter || it.area === areaFilter) && matchesText(it)
@@ -467,9 +456,9 @@ export default function PackageBoard() {
     );
 
     const extraAreas = Array.from(
-      new Set(filtered.map((i) => i.area).filter((a) => a && !ALL_AREAS.includes(a)))
+      new Set(filtered.map((i) => i.area).filter((a) => a && !allAreas.includes(a)))
     );
-    const orderedAreas = [...ALL_AREAS, ...extraAreas].filter(
+    const orderedAreas = [...allAreas, ...extraAreas].filter(
       (a) => !areaFilter || a === areaFilter
     );
 
@@ -517,7 +506,7 @@ export default function PackageBoard() {
     }
     return groups;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, stores, view, areaFilter, term, identity]);
+  }, [items, stores, allAreas, view, areaFilter, term, identity]);
 
   const displayGroups = useMemo(
     () => injectExiting(areaGroups, exiting, view),
@@ -530,8 +519,29 @@ export default function PackageBoard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center text-sm font-semibold text-emerald-800 sm:px-4">
-         עד היום נאספו <AnimatedCount value={Math.max(0, collectedCount)} /> חבילות! 🎉
+      <div className={`grid gap-3 ${avgCloseMs !== null ? "grid-cols-2" : ""}`}>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center sm:px-4 sm:py-4">
+          <div className="text-xs font-semibold text-emerald-700 sm:text-sm">
+            🎉 נאספו עד היום
+          </div>
+          <div className="mt-1 text-2xl font-extrabold leading-tight text-emerald-900 sm:text-4xl">
+            <AnimatedCount value={Math.max(0, stats.collected)} />
+          </div>
+          <div className="text-xs text-emerald-700 sm:text-sm">חבילות</div>
+        </div>
+        {avgCloseMs !== null && (
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 px-3 py-3 text-center text-white shadow-sm sm:px-4 sm:py-4">
+            <div className="text-xs font-semibold text-brand-100 sm:text-sm">
+              ⏱️ זמן סגירת מעגל
+            </div>
+            <div className="mt-1 text-xl font-extrabold leading-tight sm:text-4xl">
+              {formatDuration(avgCloseMs)}
+            </div>
+            <div className="text-xs text-brand-100 sm:text-sm">
+              בממוצע מהפרסום ועד שנלקחה
+            </div>
+          </div>
+        )}
       </div>
 
       {(champions.length > 0 || publisherChampions.length > 0) && (
@@ -628,7 +638,7 @@ export default function PackageBoard() {
               onChange={(e) => setAreaFilter(e.target.value)}
             >
               <option value="">כל האזורים</option>
-              {ALL_AREAS.map((a) => (
+              {allAreas.map((a) => (
                 <option key={a} value={a}>
                   {a}
                 </option>
@@ -660,79 +670,73 @@ export default function PackageBoard() {
         </div>
       </div>
 
-      {!configured && <SetupNotice />}
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
 
-      {configured && (
-        <>
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
+      {loading ? (
+        <BoardSkeleton />
+      ) : displayGroups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="text-sm text-slate-500">
+            {view === "available"
+              ? "אין כרגע חבילות שממתינות ללקיחה."
+              : view === "claimed"
+              ? "אין כרגע חבילות שנלקחו."
+              : "אין חבילות שקשורות אליך (שפרסמת או שאתם אוספים)."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {displayGroups.map((area) => (
+            <section
+              key={area.area}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-3 py-3 sm:px-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-brand-900">
+                    📍 {area.area}
+                  </span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                    {area.total} חבילות
+                  </span>
+                </div>
+              </div>
 
-          {loading ? (
-            <BoardSkeleton />
-          ) : displayGroups.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-              <p className="text-sm text-slate-500">
-                {view === "available"
-                  ? "אין כרגע חבילות שממתינות ללקיחה."
-                  : view === "claimed"
-                  ? "אין כרגע חבילות שנלקחו."
-                  : "אין חבילות שקשורות אליך (שפרסמת או שאתם אוספים)."}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {displayGroups.map((area) => (
-                <section
-                  key={area.area}
-                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-3 py-3 sm:px-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-bold text-brand-900">
-                        📍 {area.area}
+              <div className="divide-y divide-slate-100">
+                {area.stores.map((store) => (
+                  <div key={store.name} className="px-3 py-3 sm:px-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="font-semibold">
+                        {store.pinned ? "📌 " : "🏬 "}
+                        {store.name}
                       </span>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        {area.total} חבילות
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {store.items.length}
                       </span>
                     </div>
+                    <ul className="space-y-2">
+                      {store.items.map((it) => (
+                        <PackageRow
+                          key={it.id}
+                          item={it}
+                          onTake={takePackage}
+                          onRelease={releasePackage}
+                          canManage={isMine(it)}
+                          exiting={fadingIds.has(it.id)}
+                          celebrateTake={celebratingId === it.id}
+                        />
+                      ))}
+                    </ul>
                   </div>
-
-                  <div className="divide-y divide-slate-100">
-                    {area.stores.map((store) => (
-                      <div key={store.name} className="px-3 py-3 sm:px-4">
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="font-semibold">
-                            {store.pinned ? "📌 " : "🏬 "}
-                            {store.name}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                            {store.items.length}
-                          </span>
-                        </div>
-                        <ul className="space-y-2">
-                          {store.items.map((it) => (
-                            <PackageRow
-                              key={it.id}
-                              item={it}
-                              onTake={takePackage}
-                              onRelease={releasePackage}
-                              canManage={isMine(it)}
-                              exiting={fadingIds.has(it.id)}
-                              celebrateTake={celebratingId === it.id}
-                            />
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
 
       <Modal
@@ -742,6 +746,7 @@ export default function PackageBoard() {
       >
         <PackageForm
           stores={stores}
+          areas={areas}
           identity={identity}
           onIdentitySave={setIdentity}
           onDone={() => {
@@ -756,7 +761,7 @@ export default function PackageBoard() {
         title="ניהול חנויות קבועות"
         onClose={() => setShowManage(false)}
       >
-        <ManageStores stores={stores} />
+        <ManageStores stores={stores} areas={areas} />
       </Modal>
 
       <Modal

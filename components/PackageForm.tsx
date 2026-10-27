@@ -3,28 +3,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPackage } from "@/lib/packages";
 import {
-  ALL_AREAS,
+  ADHOC_AREA,
   createStore,
   isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
 import { isValidPhone } from "@/lib/whatsapp";
 import type { Identity } from "@/lib/identity";
+import { useCommunity } from "./CommunityContext";
 
 const NEW_STORE = "__new__";
+const NEW_AREA = "__new_area__";
 
 export default function PackageForm({
   stores,
+  areas,
   onDone,
   identity,
   onIdentitySave,
 }: {
   stores: StoreItem[];
+  areas: string[];
   onDone: () => void;
   identity: Identity | null;
   onIdentitySave: (identity: Identity) => void;
 }) {
+  const { id: communityId } = useCommunity();
   const [area, setArea] = useState<string>("");
+  const [newArea, setNewArea] = useState<string>("");
   const [store, setStore] = useState<string>("");
   const [newStore, setNewStore] = useState<string>("");
   const [pinStore, setPinStore] = useState(true);
@@ -44,27 +50,27 @@ export default function PackageForm({
   }, [identity]);
 
   const adhoc = isAdhocArea(area);
+  const addingArea = area === NEW_AREA;
+  const resolvedArea = addingArea ? newArea.trim().replace(/\s+/g, " ") : area;
+  const typingStore = adhoc || addingArea || store === NEW_STORE;
 
   const areaStores = useMemo(
     () =>
       stores
-        .filter((s) => s.area === area)
+        .filter((s) => s.area === resolvedArea)
         .sort((a, b) => a.name.localeCompare(b.name, "he")),
-    [stores, area]
+    [stores, resolvedArea]
   );
 
   const handleAreaChange = (next: string) => {
     setArea(next);
+    setNewArea("");
     setStore("");
     setNewStore("");
     setError(null);
   };
 
-  const resolvedStore = adhoc
-    ? newStore
-    : store === NEW_STORE
-    ? newStore
-    : store;
+  const resolvedStore = typingStore ? newStore : store;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,8 +79,18 @@ export default function PackageForm({
       setError("בחרו אזור.");
       return;
     }
+    if (addingArea && !resolvedArea) {
+      setError("הזינו את שם האזור.");
+      return;
+    }
     if (!resolvedStore.trim()) {
-      setError(adhoc ? "הזינו את שם המקום." : "בחרו חנות או הוסיפו חדשה.");
+      setError(
+        adhoc
+          ? "הזינו את שם המקום."
+          : addingArea
+          ? "הזינו את שם החנות."
+          : "בחרו חנות או הוסיפו חדשה."
+      );
       return;
     }
     if (!ownerName.trim()) {
@@ -88,16 +104,16 @@ export default function PackageForm({
     setSubmitting(true);
     try {
       const storeName = resolvedStore.trim();
-      // Pin a newly typed store in a fixed area so it's reusable next time.
-      const isNew = adhoc ? false : store === NEW_STORE;
+      // Pin a newly typed store so it (and a new area) is reusable next time.
+      const isNew = !adhoc && typingStore;
       const alreadyExists = areaStores.some(
         (s) => s.name.trim().toLowerCase() === storeName.toLowerCase()
       );
       if (isNew && pinStore && !alreadyExists) {
-        await createStore(area, storeName);
+        await createStore(communityId, resolvedArea, storeName);
       }
-      await createPackage({
-        area,
+      await createPackage(communityId, {
+        area: resolvedArea,
         store: storeName,
         description,
         packageNumber,
@@ -122,7 +138,7 @@ export default function PackageForm({
           אזור <span className="text-red-500">*</span>
         </label>
         <div className="flex flex-wrap gap-2">
-          {ALL_AREAS.map((a) => (
+          {[...areas, ADHOC_AREA].map((a) => (
             <button
               key={a}
               type="button"
@@ -136,10 +152,41 @@ export default function PackageForm({
               {a}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => handleAreaChange(NEW_AREA)}
+            className={`rounded-full border border-dashed px-3 py-1.5 text-sm font-medium transition ${
+              addingArea
+                ? "border-brand-600 bg-brand-50 text-brand-700"
+                : "border-slate-400 bg-white text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            + אזור חדש
+          </button>
         </div>
+        {areas.length === 0 && !area && (
+          <p className="mt-1 text-xs text-slate-400">
+            עוד אין אזורים קבועים. הוסיפו אזור חדש (עיר, קניון, מרכז מסחרי) והוא
+            יישמר לפעם הבאה.
+          </p>
+        )}
       </div>
 
-      {area && !adhoc && (
+      {addingArea && (
+        <div>
+          <label className="label">
+            שם האזור <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="input"
+            placeholder="לדוגמה: עיר סמוכה, קניון, מרכז מסחרי"
+            value={newArea}
+            onChange={(e) => setNewArea(e.target.value)}
+          />
+        </div>
+      )}
+
+      {area && !adhoc && !addingArea && (
         <div>
           <label className="label">
             חנות <span className="text-red-500">*</span>
@@ -179,10 +226,10 @@ export default function PackageForm({
         </div>
       )}
 
-      {area && (adhoc || store === NEW_STORE) && (
+      {area && typingStore && (
         <div>
           <label className="label">
-            {adhoc ? "שם המקום" : "שם החנות החדשה"}{" "}
+            {adhoc ? "שם המקום" : addingArea ? "שם החנות" : "שם החנות החדשה"}{" "}
             <span className="text-red-500">*</span>
           </label>
           <input
@@ -199,7 +246,7 @@ export default function PackageForm({
                 onChange={(e) => setPinStore(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300"
               />
-              נעיצה לרשימה הקבועה של {area}
+              נעיצה לרשימה הקבועה של {resolvedArea || "האזור"}
             </label>
           )}
         </div>
