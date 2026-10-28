@@ -7,6 +7,7 @@ import {
   setCourierNote,
   type PackageItem,
 } from "@/lib/packages";
+import { MAX_LENGTH } from "@/lib/limits";
 import { messageToCollector, takenMessage, whatsappLink } from "@/lib/whatsapp";
 import { timeAgo } from "@/lib/time";
 import { useCommunity } from "./CommunityContext";
@@ -283,6 +284,7 @@ export default function PackageRow({
                       className="input min-h-[60px] resize-y"
                       placeholder="לדוגמה: אגיע בערב, אניח ברכב / אשים בבית שלי"
                       value={noteDraft}
+                      maxLength={MAX_LENGTH.courierNote}
                       onChange={(e) => setNoteDraft(e.target.value)}
                     />
                     <div className="flex gap-2">

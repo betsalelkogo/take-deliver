@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Identity } from "@/lib/identity";
+import { MAX_LENGTH } from "@/lib/limits";
 import { isValidPhone } from "@/lib/whatsapp";
 
 export default function IdentityForm({
@@ -42,6 +43,7 @@ export default function IdentityForm({
           className="input"
           placeholder="לדוגמה: ישראל ישראלי"
           value={name}
+          maxLength={MAX_LENGTH.name}
           onChange={(e) => setName(e.target.value)}
         />
       </div>
@@ -55,6 +57,7 @@ export default function IdentityForm({
           inputMode="tel"
           placeholder="כדי שהבעלים יוכלו לתאם איתך"
           value={phone}
+          maxLength={MAX_LENGTH.phone}
           onChange={(e) => setPhone(e.target.value)}
         />
       </div>

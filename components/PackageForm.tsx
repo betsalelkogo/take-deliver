@@ -8,6 +8,7 @@ import {
   isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
+import { MAX_LENGTH } from "@/lib/limits";
 import { isValidPhone } from "@/lib/whatsapp";
 import type { Identity } from "@/lib/identity";
 import { useCommunity } from "./CommunityContext";
@@ -181,6 +182,7 @@ export default function PackageForm({
             className="input"
             placeholder="לדוגמה: עיר סמוכה, קניון, מרכז מסחרי"
             value={newArea}
+            maxLength={MAX_LENGTH.place}
             onChange={(e) => setNewArea(e.target.value)}
           />
         </div>
@@ -236,6 +238,7 @@ export default function PackageForm({
             className="input"
             placeholder={adhoc ? "לדוגמה: נקודת איסוף חד-פעמית" : "לדוגמה: עולם הממתקים"}
             value={newStore}
+            maxLength={MAX_LENGTH.place}
             onChange={(e) => setNewStore(e.target.value)}
           />
           {!adhoc && (
@@ -259,6 +262,7 @@ export default function PackageForm({
             className="input"
             placeholder="מספר מעקב או קוד לוקר"
             value={packageNumber}
+            maxLength={MAX_LENGTH.packageNumber}
             onChange={(e) => setPackageNumber(e.target.value)}
           />
         </div>
@@ -287,6 +291,7 @@ export default function PackageForm({
             className="input"
             placeholder="מי צריך שיאספו עבורו"
             value={ownerName}
+            maxLength={MAX_LENGTH.name}
             onChange={(e) => setOwnerName(e.target.value)}
           />
         </div>
@@ -300,6 +305,7 @@ export default function PackageForm({
             inputMode="tel"
             placeholder="כדי שאוסף החבילה יוכל ליצור קשר"
             value={ownerPhone}
+            maxLength={MAX_LENGTH.phone}
             onChange={(e) => setOwnerPhone(e.target.value)}
           />
         </div>
@@ -316,6 +322,7 @@ export default function PackageForm({
           className="input min-h-[72px] resize-y"
           placeholder="כל דבר שיעזור: שעות פתיחה, מה לומר בדלפק וכו'"
           value={notes}
+          maxLength={MAX_LENGTH.notes}
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>

@@ -7,6 +7,7 @@ import {
   isAdhocArea,
   type StoreItem,
 } from "@/lib/locations";
+import { MAX_LENGTH } from "@/lib/limits";
 import { useCommunity } from "./CommunityContext";
 
 const NEW_AREA_KEY = "__new_area__";
@@ -129,6 +130,7 @@ export default function ManageStores({
                 className="input"
                 placeholder="שם חנות חדשה"
                 value={drafts[area] ?? ""}
+                maxLength={MAX_LENGTH.place}
                 onChange={(e) =>
                   setDrafts((d) => ({ ...d, [area]: e.target.value }))
                 }
@@ -158,12 +160,14 @@ export default function ManageStores({
               className="input"
               placeholder="שם האזור (עיר, קניון…)"
               value={newArea}
+              maxLength={MAX_LENGTH.place}
               onChange={(e) => setNewArea(e.target.value)}
             />
             <input
               className="input"
               placeholder="חנות ראשונה באזור"
               value={newAreaStore}
+              maxLength={MAX_LENGTH.place}
               onChange={(e) => setNewAreaStore(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { OTHER_DESTINATION, isOtherDestination } from "@/lib/destinations";
 import { createTransfer, type TransferKind } from "@/lib/transfers";
+import { MAX_LENGTH } from "@/lib/limits";
 import { isValidPhone } from "@/lib/whatsapp";
 import type { Identity } from "@/lib/identity";
 import { useCommunity } from "./CommunityContext";
@@ -117,6 +118,7 @@ export default function TransferForm({
             className="input"
             placeholder="לדוגמה: שילה, בית חולים, בסיס"
             value={customDestination}
+            maxLength={MAX_LENGTH.place}
             onChange={(e) => setCustomDestination(e.target.value)}
           />
         </div>
@@ -128,6 +130,7 @@ export default function TransferForm({
           className="input"
           placeholder="לדוגמה: בימים הקרובים, יום חמישי בבוקר"
           value={whenText}
+          maxLength={MAX_LENGTH.whenText}
           onChange={(e) => setWhenText(e.target.value)}
         />
       </div>
@@ -154,6 +157,7 @@ export default function TransferForm({
             className="input"
             placeholder="לדוגמה: לחייל בחומש, למשפחה"
             value={forWhom}
+            maxLength={MAX_LENGTH.forWhom}
             onChange={(e) => setForWhom(e.target.value)}
           />
         </div>
@@ -168,6 +172,7 @@ export default function TransferForm({
             className="input"
             placeholder={isTrip ? "מי נוסע" : "מי צריך להעביר"}
             value={ownerName}
+            maxLength={MAX_LENGTH.name}
             onChange={(e) => setOwnerName(e.target.value)}
           />
         </div>
@@ -181,6 +186,7 @@ export default function TransferForm({
             inputMode="tel"
             placeholder="כדי שיוכלו לתאם איתך"
             value={ownerPhone}
+            maxLength={MAX_LENGTH.phone}
             onChange={(e) => setOwnerPhone(e.target.value)}
           />
         </div>
@@ -196,6 +202,7 @@ export default function TransferForm({
               : "גודל, נקודת מסירה ביישוב, כל דבר שיעזור"
           }
           value={notes}
+          maxLength={MAX_LENGTH.notes}
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>

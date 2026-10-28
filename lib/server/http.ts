@@ -35,10 +35,37 @@ export async function parseBody<T>(req: Request, schema: z.ZodType<T>): Promise<
     throw new HttpError(400, "בקשה לא תקינה.");
   }
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) {
-    throw new HttpError(400, "חלק מהפרטים חסרים או לא תקינים.");
-  }
+  if (!parsed.success) throw new HttpError(400, invalidMessage(parsed.error));
   return parsed.data;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "השם",
+  area: "האזור",
+  store: "החנות",
+  description: "התיאור",
+  packageNumber: "מספר / קוד החבילה",
+  ownerName: "השם",
+  ownerPhone: "הטלפון",
+  courierName: "השם",
+  courierPhone: "הטלפון",
+  riderName: "השם",
+  riderPhone: "הטלפון",
+  notes: "ההערות",
+  note: "ההערה",
+  destination: "היעד",
+  whenText: "מתי",
+  forWhom: "בשביל מי",
+};
+
+function invalidMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  const label = issue ? FIELD_LABELS[String(issue.path[0])] : undefined;
+  if (!issue || !label) return "חלק מהפרטים חסרים או לא תקינים.";
+  if (issue.code === "too_big") {
+    return `${label}: ארוך מדי (עד ${issue.maximum} תווים).`;
+  }
+  return `${label}: חסר או לא תקין.`;
 }
 
 // Runs a route body, turning failures into generic JSON errors. Details are
