@@ -5,9 +5,9 @@ export default function BoardSkeleton() {
       {[0, 1].map((section) => (
         <section
           key={section}
-          className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+          className="overflow-hidden rounded-card border-[1.5px] border-line bg-white shadow-hard-sm"
         >
-          <div className="flex items-center gap-2 border-b border-slate-200 bg-brand-50 px-3 py-3 sm:px-4">
+          <div className="flex items-center gap-2 border-b border-line bg-muted px-3 py-3 sm:px-4">
             <div className="h-5 w-28 rounded-md bg-brand-200/80 motion-safe:animate-pulse" />
             <div className="h-5 w-14 rounded-full bg-white motion-safe:animate-pulse" />
           </div>

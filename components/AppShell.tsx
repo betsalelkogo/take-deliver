@@ -13,22 +13,22 @@ export default function AppShell({
 }) {
   return (
     <>
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b-[1.5px] border-line bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icon-192.png"
               alt=""
-              className="h-8 w-8 shrink-0 rounded-lg sm:h-9 sm:w-9"
+              className="h-8 w-8 shrink-0 rounded-[10px] border-2 border-plum sm:h-9 sm:w-9"
               width={36}
               height={36}
             />
             <div className="min-w-0">
-              <h1 className="truncate text-base font-bold leading-tight sm:text-lg">
+              <h1 className="truncate font-head text-base font-bold leading-tight text-plum sm:text-lg">
                 {title}
               </h1>
-              <p className="hidden truncate text-xs text-slate-500 sm:block">
+              <p className="hidden truncate text-xs text-soft sm:block">
                 {subtitle}
               </p>
             </div>

@@ -91,7 +91,7 @@ export default function TransferRow({
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                 isTrip
-                  ? "bg-sky-100 text-sky-800"
+                  ? "bg-teal-100 text-teal-800"
                   : "bg-emerald-100 text-emerald-800"
               }`}
             >

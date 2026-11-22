@@ -73,7 +73,7 @@ export default function CommunityHome({ communityId }: { communityId: string }) 
   if (error || community === null) {
     return (
       <AppShell title={APP_NAME}>
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+        <div className="rounded-card border-[1.5px] border-dashed border-line bg-white p-8 text-center shadow-hard-sm">
           <p className="text-sm text-slate-600">
             {error ?? "הלוח הזה לא נמצא. אולי הקישור שגוי?"}
           </p>

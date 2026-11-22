@@ -163,14 +163,14 @@ export default function TransferBoard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900 sm:px-4">
+      <div className="rounded-card border-[1.5px] border-line bg-muted px-3 py-3 text-sm text-plum shadow-hard-sm sm:px-4">
         צריכים להעביר משהו ליעד אחר, כמו עיר סמוכה, בית חולים או נתב״ג? פרסמו
         בקשה. נוסעים לשם? פרסמו נסיעה, או השתבצו לבקשה שכבר ממתינה.
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex w-full rounded-lg border border-slate-300 bg-white p-0.5 sm:inline-flex sm:w-auto">
+          <div className="flex w-full rounded-card border-2 border-plum bg-white p-1 shadow-hard-sm sm:inline-flex sm:w-auto">
             {(["open", "mine"] as View[]).map((v) => {
               const label = v === "open" ? "פתוח" : "שלי";
               const count = v === "open" ? counts.open : counts.mine;
@@ -179,10 +179,10 @@ export default function TransferBoard() {
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-3 sm:py-1.5 sm:text-sm ${
+                  className={`min-w-0 flex-1 rounded-[10px] px-2 py-2 text-xs font-semibold transition sm:flex-none sm:px-3 sm:py-1.5 sm:text-sm ${
                     view === v
-                      ? "bg-brand-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
+                      ? "bg-mag text-white"
+                      : "text-soft hover:bg-muted"
                   }`}
                 >
                   {label} ({count})
@@ -194,7 +194,7 @@ export default function TransferBoard() {
             {identity?.name ? (
               <button
                 type="button"
-                className="max-w-full truncate rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+                className="max-w-full truncate rounded-full border-[1.5px] border-line bg-muted px-3 py-1.5 text-sm font-semibold text-plum hover:border-plum"
                 onClick={() => setShowIdentity(true)}
               >
                 אני: <span className="font-semibold">{identity.name}</span> ✎
@@ -252,7 +252,7 @@ export default function TransferBoard() {
       {loading ? (
         <BoardSkeleton />
       ) : groups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+        <div className="rounded-card border-[1.5px] border-dashed border-line bg-white p-10 text-center shadow-hard-sm">
           <p className="text-sm text-slate-500">
             {view === "open"
               ? "אין כרגע בקשות או נסיעות פתוחות."
@@ -264,10 +264,10 @@ export default function TransferBoard() {
           {groups.map((group) => (
             <section
               key={group.destination}
-              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+              className="overflow-hidden rounded-card border-[1.5px] border-line bg-white shadow-hard-sm"
             >
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-sky-50 px-3 py-3 sm:px-4">
-                <span className="text-base font-bold text-sky-900">
+              <div className="flex flex-wrap items-center gap-2 border-b border-line bg-muted px-3 py-3 sm:px-4">
+                <span className="font-head text-base font-bold text-plum">
                   {group.destination}
                 </span>
                 <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">

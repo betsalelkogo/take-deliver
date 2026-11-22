@@ -1,7 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Assistant, Rubik } from "next/font/google";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
 import { APP_NAME } from "@/lib/brand";
+
+const assistant = Assistant({
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const rubik = Rubik({
+  subsets: ["hebrew", "latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-head",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: `${APP_NAME} — חבילות והעברות בין שכנים`,
@@ -20,7 +35,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#4f46e5",
+  themeColor: "#2b1240",
 };
 
 export default function RootLayout({
@@ -29,12 +44,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className="overflow-x-hidden">
-      <body className="overflow-x-hidden">
+    <html
+      lang="he"
+      dir="rtl"
+      className={`${assistant.variable} ${rubik.variable} overflow-x-hidden`}
+    >
+      <body className={`${assistant.className} overflow-x-hidden`}>
         <PwaRegister />
         <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)]">
           <div className="flex-1">{children}</div>
-          <footer className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[11px] leading-4 text-slate-400">
+          <footer className="mt-8 border-t-[1.5px] border-line px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 text-center text-xs leading-5 text-soft">
             © {new Date().getFullYear()} {APP_NAME} · כל הזכויות שמורות
           </footer>
         </div>

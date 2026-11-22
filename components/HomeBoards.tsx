@@ -31,14 +31,14 @@ export default function HomeBoards() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex w-full rounded-xl border border-slate-300 bg-white p-1">
+      <div className="flex w-full rounded-card border-2 border-plum bg-white p-1 shadow-hard-sm">
         <button
           type="button"
           onClick={() => choose("pickup")}
-          className={`min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
+          className={`min-w-0 flex-1 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition ${
             board === "pickup"
-              ? "bg-brand-600 text-white"
-              : "text-slate-600 hover:bg-slate-100"
+              ? "bg-mag text-white"
+              : "text-soft hover:bg-muted"
           }`}
         >
           איסוף מחנויות
@@ -46,10 +46,10 @@ export default function HomeBoards() {
         <button
           type="button"
           onClick={() => choose("transfer")}
-          className={`min-w-0 flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
+          className={`min-w-0 flex-1 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition ${
             board === "transfer"
-              ? "bg-brand-600 text-white"
-              : "text-slate-600 hover:bg-slate-100"
+              ? "bg-mag text-white"
+              : "text-soft hover:bg-muted"
           }`}
         >
           העברות

@@ -19,7 +19,7 @@ function ListSkeleton() {
       {[0, 1, 2, 3].map((i) => (
         <li
           key={i}
-          className="h-[3.25rem] rounded-xl border border-slate-200 bg-white motion-safe:animate-pulse"
+          className="h-[3.25rem] rounded-card border-[1.5px] border-line bg-white shadow-hard-sm motion-safe:animate-pulse"
         />
       ))}
     </ul>
@@ -74,9 +74,9 @@ export default function CommunityPicker() {
   return (
     <AppShell title={APP_NAME}>
       <div className="space-y-4 sm:space-y-6">
-        <section className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-4 text-white sm:p-6">
-          <h2 className="text-lg font-bold sm:text-xl">מאיפה אתם?</h2>
-          <p className="mt-1 max-w-2xl text-sm text-brand-50">
+        <section className="rounded-card border-[1.5px] border-line bg-white p-4 shadow-hard-sm sm:p-6">
+          <h2 className="text-lg font-bold text-plum sm:text-xl">מאיפה אתם?</h2>
+          <p className="mt-1 max-w-2xl text-sm text-soft">
             בחרו את היישוב, השכונה או הבניין שלכם כדי לראות את החבילות
             וההעברות שלו. לא מצאתם? פתחו לוח חדש בחינם, זה לוקח חצי דקה.
           </p>
@@ -107,7 +107,7 @@ export default function CommunityPicker() {
         {!ready || communities === null ? (
           <ListSkeleton />
         ) : visible.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <div className="rounded-card border-[1.5px] border-dashed border-line bg-white p-8 text-center shadow-hard-sm">
             <p className="text-sm text-slate-500">
               {term ? <>לא מצאנו את &quot;{search.trim()}&quot;.</> : "עוד אין לוחות."}
             </p>
@@ -125,7 +125,7 @@ export default function CommunityPicker() {
               <li key={c.id}>
                 <Link
                   href={`/c/${c.id}`}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-800 transition hover:border-brand-300 hover:bg-brand-50"
+                  className="flex items-center justify-between gap-2 rounded-card border-[1.5px] border-line bg-white px-4 py-3 font-semibold text-plum no-underline shadow-hard-sm transition hover:translate-x-[3px] hover:translate-y-[3px] hover:bg-muted hover:shadow-none"
                 >
                   <span className="truncate">📍 {c.name}</span>
                   <span aria-hidden="true" className="text-slate-400">

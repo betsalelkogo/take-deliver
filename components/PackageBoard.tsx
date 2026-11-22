@@ -126,7 +126,7 @@ function PodiumPlace({
       ? "border-sky-300 from-sky-50 to-sky-200 pb-3 pt-2 sm:pb-4 sm:pt-3"
       : place === 2
         ? "border-slate-300 from-slate-50 to-slate-200 pb-2 pt-1.5 sm:pb-3 sm:pt-2"
-        : "border-indigo-300 from-indigo-50 to-indigo-200 pb-1.5 pt-1.5 sm:pb-2 sm:pt-2";
+        : "border-brand-300 from-brand-50 to-brand-100 pb-1.5 pt-1.5 sm:pb-2 sm:pt-2";
   const collectStep =
     place === 1
       ? "h-7 bg-amber-400 sm:h-10"
@@ -135,10 +135,10 @@ function PodiumPlace({
         : "h-4 bg-orange-400 sm:h-5";
   const publishStep =
     place === 1
-      ? "h-7 bg-sky-400 sm:h-10"
+      ? "h-7 bg-teal-400 sm:h-10"
       : place === 2
         ? "h-5 bg-slate-400 sm:h-7"
-        : "h-4 bg-indigo-400 sm:h-5";
+        : "h-4 bg-mag sm:h-5";
   const card = theme === "collect" ? collectCard : publishCard;
   const step = theme === "collect" ? collectStep : publishStep;
 
@@ -520,21 +520,21 @@ export default function PackageBoard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className={`grid gap-3 ${avgCloseMs !== null ? "grid-cols-2" : ""}`}>
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center sm:px-4 sm:py-4">
-          <div className="text-xs font-semibold text-emerald-700 sm:text-sm">
+        <div className="flex flex-col items-center justify-center rounded-card border-2 border-plum bg-[#f7fbe3] px-3 py-3 text-center shadow-hard-sm sm:px-4 sm:py-4">
+          <div className="text-xs font-semibold text-[#5f7d18] sm:text-sm">
             🎉 נאספו עד היום
           </div>
-          <div className="mt-1 text-2xl font-extrabold leading-tight text-emerald-900 sm:text-4xl">
+          <div className="mt-1 font-head text-2xl font-extrabold leading-tight text-plum sm:text-4xl">
             <AnimatedCount value={Math.max(0, stats.collected)} />
           </div>
-          <div className="text-xs text-emerald-700 sm:text-sm">חבילות</div>
+          <div className="text-xs text-[#5f7d18] sm:text-sm">חבילות</div>
         </div>
         {avgCloseMs !== null && (
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 px-3 py-3 text-center text-white shadow-sm sm:px-4 sm:py-4">
+          <div className="flex flex-col items-center justify-center rounded-card border-2 border-plum bg-plum px-3 py-3 text-center text-white shadow-hard-sm sm:px-4 sm:py-4">
             <div className="text-xs font-semibold text-brand-100 sm:text-sm">
               ⏱️ זמן סגירת מעגל
             </div>
-            <div className="mt-1 text-xl font-extrabold leading-tight sm:text-4xl">
+            <div className="mt-1 font-head text-xl font-extrabold leading-tight sm:text-4xl">
               {formatDuration(avgCloseMs)}
             </div>
             <div className="text-xs text-brand-100 sm:text-sm">
@@ -563,8 +563,8 @@ export default function PackageBoard() {
             title="📦 אלופי החבילות"
             people={publisherChampions}
             theme="publish"
-            frameClass="border-sky-200 bg-sky-50"
-            titleClass="text-sky-900"
+            frameClass="border-teal-200 bg-teal-50"
+            titleClass="text-teal-900"
           />
         </div>
       )}
@@ -572,7 +572,7 @@ export default function PackageBoard() {
       {/* Controls */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex w-full rounded-lg border border-slate-300 bg-white p-0.5 sm:inline-flex sm:w-auto">
+          <div className="flex w-full rounded-card border-2 border-plum bg-white p-1 shadow-hard-sm sm:inline-flex sm:w-auto">
             {(["available", "claimed", "mine"] as View[]).map((v) => {
               const label =
                 v === "available"
@@ -593,10 +593,10 @@ export default function PackageBoard() {
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-3 sm:py-1.5 sm:text-sm ${
+                  className={`min-w-0 flex-1 rounded-[10px] px-2 py-2 text-xs font-semibold transition sm:flex-none sm:px-3 sm:py-1.5 sm:text-sm ${
                     view === v
-                      ? "bg-brand-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
+                      ? "bg-mag text-white"
+                      : "text-soft hover:bg-muted"
                   }`}
                 >
                   <span className="sm:hidden">
@@ -613,7 +613,7 @@ export default function PackageBoard() {
             {identity?.name ? (
               <button
                 type="button"
-                className="max-w-full truncate rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+                className="max-w-full truncate rounded-full border-[1.5px] border-line bg-muted px-3 py-1.5 text-sm font-semibold text-plum hover:border-plum"
                 onClick={() => setShowIdentity(true)}
               >
                 אני: <span className="font-semibold">{identity.name}</span> ✎
@@ -679,7 +679,7 @@ export default function PackageBoard() {
       {loading ? (
         <BoardSkeleton />
       ) : displayGroups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+        <div className="rounded-card border-[1.5px] border-dashed border-line bg-white p-10 text-center shadow-hard-sm">
           <p className="text-sm text-slate-500">
             {view === "available"
               ? "אין כרגע חבילות שממתינות ללקיחה."
@@ -693,11 +693,11 @@ export default function PackageBoard() {
           {displayGroups.map((area) => (
             <section
               key={area.area}
-              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+              className="overflow-hidden rounded-card border-[1.5px] border-line bg-white shadow-hard-sm"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-3 py-3 sm:px-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-muted px-3 py-3 sm:px-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-bold text-brand-900">
+                  <span className="font-head text-base font-bold text-plum">
                     📍 {area.area}
                   </span>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">

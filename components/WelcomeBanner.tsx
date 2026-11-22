@@ -35,20 +35,16 @@ export default function WelcomeBanner() {
   if (!visible) return null;
 
   return (
-    <section className="relative rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-4 text-white sm:p-6">
-      <h2 className="pe-8 text-lg font-bold sm:text-xl">
+    <section className="relative rounded-card border-[1.5px] border-line bg-white p-4 shadow-hard-sm sm:p-6">
+      <h2 className="pe-8 text-lg font-bold text-plum sm:text-xl">
         צריכים עזרה עם חבילה?
       </h2>
-      <p className="mt-1 max-w-2xl text-sm text-brand-50">
+      <p className="mt-1 max-w-2xl text-sm text-soft">
         איסוף מחנות, או העברה ליעד אחר. פרסמו את הבקשה, ומי שבדרך לשם משתבץ.
         בלי עוד הודעות &quot;מישהו מגיע ל___?&quot;.
       </p>
       <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={dismiss}
-          className="rounded-lg bg-white/15 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/25"
-        >
+        <button type="button" onClick={dismiss} className="btn-secondary px-3 py-1.5 text-sm">
           הבנתי
         </button>
       </div>
