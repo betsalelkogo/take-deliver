@@ -40,7 +40,7 @@ export default function AppShell({
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-3 pt-4 sm:px-4 sm:pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <main className="mx-auto max-w-5xl px-3 pb-6 pt-4 sm:px-4 sm:pt-6">
         {children}
       </main>
     </>
