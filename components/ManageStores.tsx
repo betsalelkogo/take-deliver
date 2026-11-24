@@ -21,8 +21,10 @@ export default function ManageStores({
 }) {
   const { id: communityId } = useCommunity();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [hoursDrafts, setHoursDrafts] = useState<Record<string, string>>({});
   const [newArea, setNewArea] = useState("");
   const [newAreaStore, setNewAreaStore] = useState("");
+  const [newAreaHours, setNewAreaHours] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +53,9 @@ export default function ManageStores({
     setError(null);
     setBusy(area);
     try {
-      await createStore(communityId, area, name);
+      await createStore(communityId, area, name, hoursDrafts[area] ?? "");
       setDrafts((d) => ({ ...d, [area]: "" }));
+      setHoursDrafts((d) => ({ ...d, [area]: "" }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש.");
     } finally {
@@ -74,9 +77,10 @@ export default function ManageStores({
     setError(null);
     setBusy(NEW_AREA_KEY);
     try {
-      await createStore(communityId, area, name);
+      await createStore(communityId, area, name, newAreaHours);
       setNewArea("");
       setNewAreaStore("");
+      setNewAreaHours("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש.");
     } finally {
@@ -89,6 +93,7 @@ export default function ManageStores({
       <p className="text-sm text-slate-600">
         הוסיפו חנויות קבועות לכל אזור. הן יופיעו תמיד כשמפרסמים חבילה וגם בלוח,
         כדי שכולם ישתמשו באותם שמות. אזור חדש נשמר כשיש בו לפחות חנות אחת.
+        אפשר להוסיף שעות פתיחה, למשל &quot;א׳–ה׳ 9:00–19:00&quot;.
       </p>
 
       {error && (
@@ -114,18 +119,23 @@ export default function ManageStores({
                   className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-sm"
                 >
                   📌 {s.name}
+                  {s.hours && <span className="text-xs text-soft">· 🕒 {s.hours}</span>}
                   <button
                     type="button"
                     className="text-slate-400 hover:text-red-600"
                     aria-label={`מחיקת ${s.name}`}
-                    onClick={() => deleteStore(communityId, s.id)}
+                    onClick={() =>
+                      deleteStore(communityId, s.id).catch((err) =>
+                        setError(err instanceof Error ? err.message : "משהו השתבש.")
+                      )
+                    }
                   >
                     ×
                   </button>
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 className="input"
                 placeholder="שם חנות חדשה"
@@ -133,6 +143,22 @@ export default function ManageStores({
                 maxLength={MAX_LENGTH.place}
                 onChange={(e) =>
                   setDrafts((d) => ({ ...d, [area]: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    add(area);
+                  }
+                }}
+              />
+              <input
+                className="input"
+                placeholder="שעות פתיחה (לא חובה)"
+                aria-label="שעות פתיחה"
+                value={hoursDrafts[area] ?? ""}
+                maxLength={MAX_LENGTH.storeHours}
+                onChange={(e) =>
+                  setHoursDrafts((d) => ({ ...d, [area]: e.target.value }))
                 }
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -175,6 +201,14 @@ export default function ManageStores({
                   addArea();
                 }
               }}
+            />
+            <input
+              className="input"
+              placeholder="שעות פתיחה (לא חובה)"
+              aria-label="שעות פתיחה"
+              value={newAreaHours}
+              maxLength={MAX_LENGTH.storeHours}
+              onChange={(e) => setNewAreaHours(e.target.value)}
             />
             <button
               type="button"

@@ -31,3 +31,6 @@ secrets.json
 
 # typescript
 *.tsbuildinfo
+
+# compiled tests (npm test)
+/.test-build

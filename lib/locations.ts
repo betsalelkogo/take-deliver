@@ -11,6 +11,7 @@ export interface StoreItem {
   id: string;
   area: string;
   name: string;
+  hours: string;
 }
 
 // A community's first-level areas: its fixed list, then every other area that
@@ -35,9 +36,10 @@ function storesPath(communityId: string, id?: string): string {
 export async function createStore(
   communityId: string,
   area: string,
-  name: string
+  name: string,
+  hours = ""
 ): Promise<void> {
-  await api(storesPath(communityId), { method: "POST", body: { area, name } });
+  await api(storesPath(communityId), { method: "POST", body: { area, name, hours } });
   requestRefresh();
 }
 

@@ -14,11 +14,14 @@ export interface TransferItem {
   urgent: boolean;
   status: TransferStatus;
   ownerName: string;
-  ownerPhone: string;
+  // Sent to the owner and rider, and to everyone for an open trip.
+  ownerPhone: string | null;
   riderName: string | null;
   riderPhone: string | null;
   createdAt: number | null;
   matchedAt: number | null;
+  mine: { owner: boolean; rider: boolean };
+  can: { delete: boolean; close: boolean; unmatch: boolean };
 }
 
 export interface NewTransferInput {

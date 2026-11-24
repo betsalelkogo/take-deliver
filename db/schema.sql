@@ -89,3 +89,24 @@ CREATE TABLE IF NOT EXISTS scores (
   count        integer NOT NULL DEFAULT 0 CHECK (count >= 0),
   PRIMARY KEY (community_id, kind, person_id)
 );
+
+-- Who may manage a row: a hash of the signed-in resident or of the device
+-- cookie (see lib/server/actor.ts). NULL on rows created before this existed.
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS owner_key text;
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS courier_key text;
+ALTER TABLE transfers ADD COLUMN IF NOT EXISTS owner_key text;
+ALTER TABLE transfers ADD COLUMN IF NOT EXISTS rider_key text;
+
+-- Set when the owner confirms the courier handed the package over.
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS received_at timestamptz;
+
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS hours text NOT NULL DEFAULT '';
+
+-- Fixed-window request counters (see lib/server/rateLimit.ts). Rows older
+-- than a day are pruned as requests come in.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  bucket       text NOT NULL,
+  window_start timestamptz NOT NULL,
+  hits         integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (bucket, window_start)
+);

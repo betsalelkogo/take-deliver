@@ -8,7 +8,6 @@ import {
   type TransferItem,
   type TransferKind,
 } from "@/lib/transfers";
-import { toIntlPhone } from "@/lib/whatsapp";
 import { destinationsFor } from "@/lib/destinations";
 import { useCommunity } from "./CommunityContext";
 import Modal from "./Modal";
@@ -50,18 +49,7 @@ export default function TransferBoard() {
     window.setTimeout(() => setToast((cur) => (cur === message ? null : cur)), 3500);
   };
 
-  const myPhone = identity?.phone ? toIntlPhone(identity.phone) : "";
-  const isMine = (it: TransferItem) => {
-    if (!identity) return false;
-    const byPhone =
-      !!myPhone &&
-      (toIntlPhone(it.ownerPhone) === myPhone ||
-        (!!it.riderPhone && toIntlPhone(it.riderPhone) === myPhone));
-    const byName =
-      !!identity.name &&
-      (it.ownerName === identity.name || it.riderName === identity.name);
-    return byPhone || byName;
-  };
+  const isMine = (it: TransferItem) => it.mine.owner || it.mine.rider;
 
   useEffect(
     () =>
@@ -98,8 +86,8 @@ export default function TransferBoard() {
           ? "שובצת לנסיעה! שלחו הודעה למפרסם 👇"
           : "מישהו כבר לקח את ההעברה הזו"
       );
-    } catch {
-      showToast("לא הצלחנו לשבץ, נסו שוב");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "לא הצלחנו לשבץ, נסו שוב");
     }
   };
 
@@ -280,7 +268,6 @@ export default function TransferBoard() {
                     key={it.id}
                     item={it}
                     onRide={takeRide}
-                    canManage={isMine(it)}
                     myName={identity?.name || ""}
                   />
                 ))}

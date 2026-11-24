@@ -36,11 +36,13 @@ export const packageActionSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("claim"), courierName: name, courierPhone: phone }),
   z.strictObject({ action: z.literal("release") }),
   z.strictObject({ action: z.literal("note"), note: text(MAX_LENGTH.courierNote) }),
+  z.strictObject({ action: z.literal("received") }),
 ]);
 
 export const newStoreSchema = z.strictObject({
   area: place,
   name: place,
+  hours: z.string().transform(collapse).pipe(z.string().max(MAX_LENGTH.storeHours)).default(""),
 });
 
 export const newTransferSchema = z.strictObject({

@@ -47,6 +47,39 @@ Open http://localhost:3000.
 3. Under **Settings → Environment Variables**, add `NEON_DB_URL` (or connect the Neon integration and point `NEON_DB_URL` at its pooled URL).
 4. **Deploy.** Share the URL with your group.
 
+## Who can do what
+
+The server decides, not the browser:
+
+- Each device gets a random `td_device` cookie (HttpOnly). Posts, claims and
+  rides store a hash of it (`owner_key`, `courier_key`, `rider_key`), and only
+  that device can manage them.
+- Only the owner can delete a package or edit/close a post. The owner or the
+  courier can release a claim; only the courier writes the pickup note; only
+  the owner confirms the package was received.
+- Phone numbers are sent only to the people on that package or ride. An open
+  trip's number is visible to the whole board, since that's how people join.
+  Leaderboards return names and counts only.
+- Rows created before ownership existed have no key; they are matched by the
+  phone the device saved in «מי אני?» until they expire off the board.
+- Writes are rate limited per person and per IP (Postgres counters in
+  `rate_limits`), and rejected if they come from another site's page.
+
+After pulling these changes, run `npm run db:schema` once (it only adds
+columns and a table) **before** deploying.
+
+## Tests
+
+`npm test` compiles `tests/` with `tsc` and runs them with Node's built-in
+test runner (no extra dependencies). They cover the permission rules, phone
+redaction and rate limiting.
+
+## Legal pages
+
+`/accessibility`, `/privacy` and `/terms` are linked from every page's footer.
+Fill in the operator name and contact details in `lib/legal.ts` before
+publishing, and have someone qualified review the text.
+
 ## Moving from Firebase
 
 The app used to keep everything in Firestore. `npm run migrate:firestore` copies it all into Neon (Kerem Reim's root collections and every `communities/{id}` subtree), creating the schema first. It reads Firestore through its public REST API, so it needs `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and `NEXT_PUBLIC_FIREBASE_API_KEY` in `.env`.
@@ -122,14 +155,15 @@ See [`db/schema.sql`](./db/schema.sql) for the full definitions.
 | `transfers` | Ride requests/offers (`open` / `matched` / `closed`) |
 | `community_stats` | All-time collected count + close-time totals for the average |
 | `scores` | Collector / publisher leaderboards |
+| `rate_limits` | Per-person / per-IP request counters (pruned after a day) |
 
 Old entries are cleaned up when a board is loaded: claimed packages after 2
 days, untaken ones after 30 days, open transfers after 7 days, done ones after 2.
 
 ## Possible next steps
 
-- Add sign-in (e.g. **Neon Auth**) and lock writes/deletes to signed-in users.
-- Rate-limit the API routes.
-- Add ETA / pickup time to a claim.
-- Notify owners via email/Telegram in addition to WhatsApp.
+- SMS (InforU) for urgent packages only, since it has a quota.
+- Web push notifications through the existing service worker.
+- An offline page in the service worker.
+- Editing a pinned store's hours without removing and re-adding it.
 ```

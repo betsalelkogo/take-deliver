@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "rm -rf .test-build && tsc -p tsconfig.test.json && node --test \".test-build/tests/*.test.js\"",
     "db:schema": "node --env-file=.env scripts/apply-schema.mjs",
     "migrate:firestore": "node --env-file=.env scripts/migrate-from-firestore.mjs"
   },

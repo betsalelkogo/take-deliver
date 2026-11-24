@@ -2,6 +2,20 @@
 
 const POLL_MS = 10_000;
 const REFRESH_EVENT = "td:refresh";
+const IDENTITY_KEY = "td_identity_v1";
+
+// Lets the server recognise this device's posts from before ownership keys
+// (matched by the phone saved in «מי אני?»).
+function legacyPhoneHeader(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(IDENTITY_KEY);
+    const saved = raw ? (JSON.parse(raw) as { phone?: unknown }).phone : null;
+    const phone = typeof saved === "string" ? saved.replace(/[^\d+]/g, "").slice(0, 30) : "";
+    return phone ? { "X-TD-Phone": phone } : {};
+  } catch {
+    return {};
+  }
+}
 
 export class ApiError extends Error {
   constructor(
@@ -19,7 +33,10 @@ export async function api<T>(
   const hasBody = init.body !== undefined;
   const res = await fetch(path, {
     method: init.method ?? "GET",
-    headers: hasBody ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...legacyPhoneHeader(),
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    },
     body: hasBody ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
   });

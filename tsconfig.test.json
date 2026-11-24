@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "incremental": false,
+    "plugins": []
+  },
+  "include": ["tests/**/*.ts"]
+}

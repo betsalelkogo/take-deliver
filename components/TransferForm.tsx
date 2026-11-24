@@ -191,6 +191,11 @@ export default function TransferForm({
           />
         </div>
       </div>
+      <p className="-mt-2 text-xs text-slate-400">
+        {isTrip
+          ? "הטלפון של נסיעה פתוחה גלוי לכל מי שבלוח, כדי שיוכלו לפנות אליך."
+          : "הטלפון יוצג רק למי שישתבץ לבקשה."}
+      </p>
 
       <div>
         <label className="label">הערות</label>

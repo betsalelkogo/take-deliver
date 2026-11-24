@@ -37,15 +37,17 @@ function haptic(ms = 15) {
   }
 }
 
+function reportError(err: unknown) {
+  alert(err instanceof Error ? err.message : "הפעולה נכשלה, נסו שוב.");
+}
+
 export default function TransferRow({
   item,
   onRide,
-  canManage,
   myName,
 }: {
   item: TransferItem;
   onRide: (item: TransferItem) => void | Promise<void>;
-  canManage: boolean;
   myName: string;
 }) {
   const { id: communityId } = useCommunity();
@@ -162,21 +164,24 @@ export default function TransferRow({
               )}
             </p>
           )}
-          <button
-            type="button"
-            className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
-            onClick={() => {
-              unmatchTransfer(communityId, item.id).catch(() => {});
-            }}
-          >
-            התחרטתי
-          </button>
+          {item.can.unmatch && (
+            <button
+              type="button"
+              className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
+              onClick={() => {
+                unmatchTransfer(communityId, item.id).catch(reportError);
+              }}
+            >
+              {item.mine.rider ? "התחרטתי" : "החזרה ללוח"}
+            </button>
+          )}
         </div>
       )}
 
-      {isMatched && (item.ownerPhone || item.riderPhone) && (
+      {isMatched &&
+        ((item.mine.rider && item.ownerPhone) || (item.mine.owner && item.riderPhone)) && (
         <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
-          {item.ownerPhone && (
+          {item.mine.rider && item.ownerPhone && (
             <a
               href={whatsappLink(
                 item.ownerPhone,
@@ -189,7 +194,7 @@ export default function TransferRow({
               <WhatsappIcon /> הודעה למפרסם
             </a>
           )}
-          {item.riderPhone && (
+          {item.mine.owner && item.riderPhone && (
             <a
               href={whatsappLink(item.riderPhone, rideThanksMessage(item))}
               target="_blank"
@@ -224,21 +229,23 @@ export default function TransferRow({
             )}
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
-            {canManage && isTrip && isOpen && (
+            {item.can.close && isTrip && isOpen && (
               <button
                 type="button"
                 className="btn-secondary px-3 py-1 text-xs"
-                onClick={() => closeTransfer(communityId, item.id)}
+                onClick={() => closeTransfer(communityId, item.id).catch(reportError)}
               >
                 הנסיעה יצאה
               </button>
             )}
-            {canManage && (
+            {item.can.delete && (
               <button
                 type="button"
                 className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
                 onClick={() => {
-                  if (confirm("למחוק את המודעה?")) deleteTransfer(communityId, item.id);
+                  if (confirm("למחוק את המודעה?")) {
+                    deleteTransfer(communityId, item.id).catch(reportError);
+                  }
                 }}
               >
                 מחיקה

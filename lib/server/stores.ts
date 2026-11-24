@@ -4,11 +4,12 @@ import { db } from "./db";
 export async function createStore(
   communityId: string,
   area: string,
-  name: string
+  name: string,
+  hours: string
 ): Promise<void> {
   await db()`
-    INSERT INTO stores (community_id, area, name)
-    VALUES (${communityId}, ${area}, ${name})
+    INSERT INTO stores (community_id, area, name, hours)
+    VALUES (${communityId}, ${area}, ${name}, ${hours})
     ON CONFLICT DO NOTHING`;
 }
 

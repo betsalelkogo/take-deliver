@@ -310,11 +310,10 @@ export default function PackageForm({
           />
         </div>
       </div>
-      {identity?.name && identity?.phone && (
-        <p className="-mt-2 text-xs text-slate-400">
-          מולא אוטומטית מ«מי אני?» — אפשר לערוך אם צריך.
-        </p>
-      )}
+      <p className="-mt-2 text-xs text-slate-400">
+        {identity?.name && identity?.phone ? "מולא אוטומטית מ«מי אני?» — אפשר לערוך אם צריך. " : ""}
+        הטלפון יוצג רק למי שיאסוף את החבילה.
+      </p>
 
       <div>
         <label className="label">הערות</label>

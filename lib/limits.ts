@@ -11,4 +11,5 @@ export const MAX_LENGTH = {
   courierNote: 500,
   whenText: 100,
   forWhom: 100,
+  storeHours: 100,
 } as const;

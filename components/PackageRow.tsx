@@ -35,14 +35,21 @@ function haptic(ms = 15) {
   }
 }
 
-function StatusBadge({ status }: { status: PackageItem["status"] }) {
-  const cls: Record<PackageItem["status"], string> = {
+// Quick picks for the courier's note, so saying when you'll come is one tap.
+const ETA_CHIPS = ["אאסוף היום", "אאסוף מחר", "אגיע בערב", "אשאיר ליד הדלת"];
+
+type Badge = "available" | "claimed" | "received";
+
+function StatusBadge({ status }: { status: Badge }) {
+  const cls: Record<Badge, string> = {
     available: "bg-emerald-100 text-emerald-700",
     claimed: "bg-amber-100 text-amber-700",
+    received: "bg-teal-100 text-teal-800",
   };
-  const label: Record<PackageItem["status"], string> = {
+  const label: Record<Badge, string> = {
     available: "ממתין ללקיחה",
     claimed: "נלקח",
+    received: "התקבל ✓",
   };
   return (
     <span
@@ -57,14 +64,14 @@ export default function PackageRow({
   item,
   onTake,
   onRelease,
-  canManage,
+  onReceive,
   exiting = false,
   celebrateTake = false,
 }: {
   item: PackageItem;
   onTake: (item: PackageItem) => void | Promise<TakeResult>;
   onRelease: (item: PackageItem) => void | Promise<void>;
-  canManage: boolean;
+  onReceive: (item: PackageItem) => void | Promise<void>;
   exiting?: boolean;
   celebrateTake?: boolean;
 }) {
@@ -76,7 +83,10 @@ export default function PackageRow({
   const [playing, setPlaying] = useState(false);
 
   const claimed = item.status === "claimed";
-  const liClass = claimed
+  const received = claimed && item.receivedAt !== null;
+  const liClass = received
+    ? "border border-teal-200 bg-teal-50"
+    : claimed
     ? "border border-amber-300 bg-amber-50"
     : item.urgent
       ? "border border-red-300 bg-red-50"
@@ -85,8 +95,12 @@ export default function PackageRow({
   const created = timeAgo(item.createdAt);
 
   const saveNote = async () => {
-    await setCourierNote(communityId, item.id, noteDraft);
-    setEditingNote(false);
+    try {
+      await setCourierNote(communityId, item.id, noteDraft);
+      setEditingNote(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "השמירה נכשלה.");
+    }
   };
 
   useEffect(() => {
@@ -120,6 +134,20 @@ export default function PackageRow({
     }
   };
 
+  const handleReceive = async () => {
+    if (busy || exiting) return;
+    setBusy(true);
+    haptic(12);
+    try {
+      await onReceive(item);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addChip = (chip: string) =>
+    setNoteDraft((d) => (d.trim() ? `${d.trim()} · ${chip}` : chip).slice(0, MAX_LENGTH.courierNote));
+
   return (
     <li
       className={`package-row overflow-hidden rounded-lg px-2 py-2 sm:px-3 ${liClass} ${
@@ -140,7 +168,7 @@ export default function PackageRow({
                 🔴 דחוף
               </span>
             )}
-            <StatusBadge status={item.status} />
+            <StatusBadge status={received ? "received" : item.status} />
           </div>
         </div>
 
@@ -208,19 +236,31 @@ export default function PackageRow({
                 )}
               </p>
             )}
-            <button
-              type="button"
-              className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
-              onClick={handleRelease}
-              disabled={busy || exiting || !claimed}
-            >
-              {busy && claimed ? "משחרר…" : "התחרטתי"}
-            </button>
+            {item.can.receive && (
+              <button
+                type="button"
+                className="btn-primary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
+                onClick={handleReceive}
+                disabled={busy || exiting}
+              >
+                ✅ קיבלתי את החבילה
+              </button>
+            )}
+            {item.can.release && (
+              <button
+                type="button"
+                className="btn-secondary w-full px-3 py-2 text-sm sm:w-auto sm:py-1 sm:text-xs"
+                onClick={handleRelease}
+                disabled={busy || exiting || !claimed}
+              >
+                {busy && claimed ? "משחרר…" : item.mine.courier ? "התחרטתי" : "החזרה ללוח"}
+              </button>
+            )}
           </div>
 
-          {(item.ownerPhone || item.courierPhone) && (
+          {((item.mine.courier && item.ownerPhone) || (item.mine.owner && item.courierPhone)) && (
             <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
-              {item.ownerPhone && (
+              {item.mine.courier && item.ownerPhone && (
                 <a
                   href={whatsappLink(
                     item.ownerPhone,
@@ -233,7 +273,7 @@ export default function PackageRow({
                   <WhatsappIcon /> הודעה לבעל החבילה
                 </a>
               )}
-              {item.courierPhone && (
+              {item.mine.owner && item.courierPhone && (
                 <a
                   href={whatsappLink(item.courierPhone, messageToCollector(item))}
                   target="_blank"
@@ -276,10 +316,22 @@ export default function PackageRow({
 
             {item.notes && <p className="text-slate-500">📝 {item.notes}</p>}
 
-            {claimed && (
+            {claimed && (item.can.note || item.courierNote) && (
               <div>
-                {editingNote ? (
+                {editingNote && item.can.note ? (
                   <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {ETA_CHIPS.map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          className="rounded-full border-[1.5px] border-line bg-muted px-2.5 py-1 text-xs font-semibold text-plum hover:border-plum"
+                          onClick={() => addChip(chip)}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
                     <textarea
                       className="input min-h-[60px] resize-y"
                       placeholder="לדוגמה: אגיע בערב, אניח ברכב / אשים בבית שלי"
@@ -310,13 +362,15 @@ export default function PackageRow({
                 ) : item.courierNote ? (
                   <p className="flex items-center gap-2 text-slate-700">
                     🗒️ {item.courierNote}
-                    <button
-                      type="button"
-                      className="btn-ghost px-2 py-0.5 text-xs"
-                      onClick={() => setEditingNote(true)}
-                    >
-                      עריכה
-                    </button>
+                    {item.can.note && (
+                      <button
+                        type="button"
+                        className="btn-ghost px-2 py-0.5 text-xs"
+                        onClick={() => setEditingNote(true)}
+                      >
+                        עריכה
+                      </button>
+                    )}
                   </p>
                 ) : (
                   <button
@@ -331,12 +385,16 @@ export default function PackageRow({
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
-              {canManage && (
+              {item.can.delete && (
                 <button
                   type="button"
                   className="btn-ghost px-3 py-1 text-xs text-red-500 hover:text-red-700"
                   onClick={() => {
-                    if (confirm("למחוק את החבילה?")) deletePackage(communityId, item.id);
+                    if (confirm("למחוק את החבילה?")) {
+                      deletePackage(communityId, item.id).catch((err) =>
+                        alert(err instanceof Error ? err.message : "המחיקה נכשלה.")
+                      );
+                    }
                   }}
                 >
                   מחיקה

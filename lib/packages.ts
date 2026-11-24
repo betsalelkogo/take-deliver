@@ -11,7 +11,8 @@ export interface PackageItem {
   description: string;
   packageNumber: string;
   ownerName: string;
-  ownerPhone: string;
+  // Phones are only sent to the owner and the courier.
+  ownerPhone: string | null;
   notes: string;
   status: PackageStatus;
   courierName: string | null;
@@ -20,6 +21,9 @@ export interface PackageItem {
   urgent: boolean;
   createdAt: number | null;
   claimedAt: number | null;
+  receivedAt: number | null;
+  mine: { owner: boolean; courier: boolean };
+  can: { delete: boolean; release: boolean; note: boolean; receive: boolean };
 }
 
 // Everything the pickup board shows, fetched in one request.
@@ -27,8 +31,8 @@ export interface PackageBoardData {
   packages: PackageItem[];
   stores: StoreItem[];
   stats: GlobalStats;
-  topCollectors: CollectorScore[];
-  topPublishers: CollectorScore[];
+  champions: CollectorScore[];
+  publisherChampions: CollectorScore[];
 }
 
 // Taken packages are auto-removed this long after being claimed.
@@ -94,6 +98,15 @@ export async function unclaimPackage(
   const { ok } = await api<{ ok: boolean }>(packagesPath(communityId, id), {
     method: "PATCH",
     body: { action: "release" },
+  });
+  requestRefresh();
+  return ok;
+}
+
+export async function confirmReceived(communityId: string, id: string): Promise<boolean> {
+  const { ok } = await api<{ ok: boolean }>(packagesPath(communityId, id), {
+    method: "PATCH",
+    body: { action: "received" },
   });
   requestRefresh();
   return ok;

@@ -3,20 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   claimPackage,
+  confirmReceived,
   subscribeToPackageBoard,
   unclaimPackage,
   type PackageItem,
 } from "@/lib/packages";
 import { ADHOC_AREA, areasFor, type StoreItem } from "@/lib/locations";
 import { useIdentity } from "@/lib/identity";
-import {
-  averageCloseMs,
-  collectorId,
-  rankCollectors,
-  type CollectorScore,
-  type GlobalStats,
-} from "@/lib/stats";
-import { toIntlPhone } from "@/lib/whatsapp";
+import { averageCloseMs, type CollectorScore, type GlobalStats } from "@/lib/stats";
 import { formatDuration } from "@/lib/time";
 import { useCommunity } from "./CommunityContext";
 import Modal from "./Modal";
@@ -47,6 +41,7 @@ interface StoreGroup {
   items: PackageItem[];
   availableIds: string[];
   pinned: boolean;
+  hours: string;
 }
 
 interface AreaGroup {
@@ -92,6 +87,7 @@ function injectExiting(
         items: [],
         availableIds: [],
         pinned: false,
+        hours: "",
       };
       area.stores.push(store);
     }
@@ -212,8 +208,8 @@ export default function PackageBoard() {
     closeTotalMs: 0,
     closeCount: 0,
   });
-  const [topCollectors, setTopCollectors] = useState<CollectorScore[]>([]);
-  const [topPublishers, setTopPublishers] = useState<CollectorScore[]>([]);
+  const [champions, setChampions] = useState<CollectorScore[]>([]);
+  const [publisherChampions, setPublisherChampions] = useState<CollectorScore[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [exiting, setExiting] = useState<ExitingRow[]>([]);
   const [celebratingId, setCelebratingId] = useState<string | null>(null);
@@ -269,19 +265,8 @@ export default function PackageBoard() {
     window.setTimeout(() => setToast((cur) => (cur === message ? null : cur)), 3500);
   };
 
-  const myPhone = identity?.phone ? toIntlPhone(identity.phone) : "";
   // A package is "mine" if I posted it (owner) or I'm collecting it (courier).
-  const isMine = (it: PackageItem) => {
-    if (!identity) return false;
-    const byPhone =
-      !!myPhone &&
-      (toIntlPhone(it.ownerPhone) === myPhone ||
-        (!!it.courierPhone && toIntlPhone(it.courierPhone) === myPhone));
-    const byName =
-      !!identity.name &&
-      (it.ownerName === identity.name || it.courierName === identity.name);
-    return byPhone || byName;
-  };
+  const isMine = (it: PackageItem) => it.mine.owner || it.mine.courier;
 
   useEffect(
     () =>
@@ -291,8 +276,8 @@ export default function PackageBoard() {
           setItems(data.packages);
           setStores(data.stores);
           setStats(data.stats);
-          setTopCollectors(data.topCollectors);
-          setTopPublishers(data.topPublishers);
+          setChampions(data.champions);
+          setPublisherChampions(data.publisherChampions);
           setError(null);
           setLoading(false);
         },
@@ -336,8 +321,8 @@ export default function PackageBoard() {
       }
       showToast("החבילה כבר נלקחה");
       return "failed";
-    } catch {
-      showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "לא הצלחנו לרשום את הלקיחה, נסו שוב");
       return "failed";
     }
   };
@@ -353,8 +338,17 @@ export default function PackageBoard() {
       showToast(
         reverted ? "החבילה שוחררה וחזרה לרשימה" : "החבילה כבר שוחררה"
       );
-    } catch {
-      showToast("לא הצלחנו לבטל את הלקיחה, נסו שוב");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "לא הצלחנו לבטל את הלקיחה, נסו שוב");
+    }
+  };
+
+  const receivePackage = async (item: PackageItem) => {
+    try {
+      const ok = await confirmReceived(communityId, item.id);
+      showToast(ok ? "מעולה! סימנו שהחבילה הגיעה אליך 🎉" : "החבילה כבר סומנה");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "לא הצלחנו לעדכן, נסו שוב");
     }
   };
 
@@ -382,8 +376,8 @@ export default function PackageBoard() {
         } else {
           showToast("החבילה כבר נלקחה");
         }
-      } catch {
-        showToast("לא הצלחנו לרשום את הלקיחה, נסו שוב");
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "לא הצלחנו לרשום את הלקיחה, נסו שוב");
       }
     }
   };
@@ -396,37 +390,6 @@ export default function PackageBoard() {
     it.store.toLowerCase().includes(term) ||
     it.description.toLowerCase().includes(term) ||
     it.ownerName.toLowerCase().includes(term);
-
-  const champions = useMemo(() => {
-    const liveById = new Map<string, CollectorScore>();
-    for (const it of items) {
-      if (it.status !== "claimed") continue;
-      const id = collectorId(it.courierName || "", it.courierPhone || "");
-      if (!id) continue;
-      const prev = liveById.get(id);
-      liveById.set(id, {
-        id,
-        name: (it.courierName || prev?.name || "").trim(),
-        count: (prev?.count ?? 0) + 1,
-      });
-    }
-    return rankCollectors(topCollectors, Array.from(liveById.values()), 3);
-  }, [items, topCollectors]);
-
-  const publisherChampions = useMemo(() => {
-    const liveById = new Map<string, CollectorScore>();
-    for (const it of items) {
-      const id = collectorId(it.ownerName || "", it.ownerPhone || "");
-      if (!id) continue;
-      const prev = liveById.get(id);
-      liveById.set(id, {
-        id,
-        name: (it.ownerName || prev?.name || "").trim(),
-        count: (prev?.count ?? 0) + 1,
-      });
-    }
-    return rankCollectors(topPublishers, Array.from(liveById.values()), 3);
-  }, [items, topPublishers]);
 
   const avgCloseMs = useMemo(() => {
     const live = items
@@ -462,8 +425,7 @@ export default function PackageBoard() {
       (a) => !areaFilter || a === areaFilter
     );
 
-    const pinnedFor = (area: string) =>
-      stores.filter((s) => s.area === area).map((s) => s.name);
+    const pinnedFor = (area: string) => stores.filter((s) => s.area === area);
 
     const groups: AreaGroup[] = [];
 
@@ -474,7 +436,7 @@ export default function PackageBoard() {
       for (const p of areaPkgs) storeNames.add(p.store || NO_STORE);
       if (storeNames.size === 0) continue;
 
-      const pinnedNames = new Set(pinnedFor(area));
+      const pinned = new Map(pinnedFor(area).map((s) => [s.name, s]));
 
       const storeGroups: StoreGroup[] = Array.from(storeNames).map((name) => {
         const list = areaPkgs
@@ -487,7 +449,8 @@ export default function PackageBoard() {
           availableIds: list
             .filter((i) => i.status === "available")
             .map((i) => i.id),
-          pinned: pinnedNames.has(name),
+          pinned: pinned.has(name),
+          hours: pinned.get(name)?.hours ?? "",
         };
       });
 
@@ -717,6 +680,11 @@ export default function PackageBoard() {
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                         {store.items.length}
                       </span>
+                      {store.hours && (
+                        <span className="text-xs text-soft" title="שעות פתיחה">
+                          🕒 {store.hours}
+                        </span>
+                      )}
                     </div>
                     <ul className="space-y-2">
                       {store.items.map((it) => (
@@ -725,7 +693,7 @@ export default function PackageBoard() {
                           item={it}
                           onTake={takePackage}
                           onRelease={releasePackage}
-                          canManage={isMine(it)}
+                          onReceive={receivePackage}
                           exiting={fadingIds.has(it.id)}
                           celebrateTake={celebratingId === it.id}
                         />
