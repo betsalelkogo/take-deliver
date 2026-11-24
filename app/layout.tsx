@@ -50,6 +50,9 @@ export default function RootLayout({
       dir="rtl"
       className={`${assistant.variable} ${rubik.variable} overflow-x-hidden`}
     >
+      <head>
+        <meta name="vibecheck-verification" content="vc-d46ad1389658c3aac09a6dd77b739dff" />
+      </head>
       <body className={`${assistant.className} overflow-x-hidden`}>
         <a
           href="#main"
